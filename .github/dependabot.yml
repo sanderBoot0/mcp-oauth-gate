@@ -1,0 +1,22 @@
+version: 2
+updates:
+    - package-ecosystem: 'npm'
+      directory: '/'
+      schedule:
+          interval: 'weekly'
+      # Versions are pinned exact (see README) so every bump — patch
+      # included — needs an explicit PR rather than silently widening a range.
+      versioning-strategy: increase
+      groups:
+          dev-dependencies:
+              dependency-type: 'development'
+
+    - package-ecosystem: 'docker'
+      directory: '/'
+      schedule:
+          interval: 'weekly'
+
+    - package-ecosystem: 'github-actions'
+      directory: '/'
+      schedule:
+          interval: 'weekly'
