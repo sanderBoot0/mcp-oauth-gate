@@ -39,9 +39,9 @@ exactly `${BASE_URL}/auth/oauth/callback`.
 ## Running
 
 ```
-npm install
-npm run build
-npm start
+pnpm install
+pnpm run build
+pnpm start
 ```
 
 Or via Docker:
@@ -76,7 +76,7 @@ does and doesn't defend against before you deploy it for real.
 ## Testing
 
 ```
-npm test
+pnpm test
 ```
 
 Unit tests cover PKCE verification, refresh-token rotation and
@@ -88,20 +88,24 @@ refresh → reuse-detected` chain over HTTP.
 ## Linting, formatting, type-checking
 
 ```
-npm run lint          # eslint
-npm run format        # prettier --write
-npm run format:check  # prettier --check (used in CI)
-npm run typecheck     # tsc --noEmit, covering src/ and test/
+pnpm run lint          # eslint
+pnpm run format        # prettier --write
+pnpm run format:check  # prettier --check (used in CI)
+pnpm run typecheck     # tsc --noEmit, covering src/ and test/
 ```
 
 All dependency versions (including `typescript`) are pinned exact in
-`package.json` rather than range-specified, so `npm install` always
-resolves the same tree; use `npm outdated` to see what's behind.
+`package.json` rather than range-specified, so `pnpm install` always
+resolves the same tree; use `pnpm outdated` to see what's behind.
+`better-sqlite3` and `esbuild` need to run native build scripts, which
+pnpm blocks by default — that allowlist is recorded in
+`pnpm-workspace.yaml` (`allowBuilds`), not something you need to approve
+by hand.
 
 **On TypeScript 7:** `typescript` is pinned to the latest **6.x**
 (`6.0.3`), not the newer TypeScript 7 native compiler. `typescript-eslint`
-(the TS-aware linting engine `npm run lint` depends on) hard-refuses to run
-against TS 7 as of this writing — see
+(the TS-aware linting engine `pnpm run lint` depends on) hard-refuses to
+run against TS 7 as of this writing — see
 [typescript-eslint#10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940).
 Revisit once that support lands.
 
@@ -122,3 +126,11 @@ needs:
 gh variable set DOCKERHUB_USERNAME --body "<your-dockerhub-username>"
 gh secret set DOCKERHUB_TOKEN --body "<your-access-token>"
 ```
+
+## Package manager
+
+This repo uses [pnpm](https://pnpm.io/), pinned via `packageManager` in
+`package.json` — run `corepack enable` once (ships with Node ≥16.9) and
+`pnpm install` will fetch the exact pinned pnpm version automatically. Not
+npm/yarn: `package-lock.json`/`yarn.lock` aren't used, and mixing lockfiles
+will just confuse whichever tool runs second.

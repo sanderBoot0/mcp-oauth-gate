@@ -83,7 +83,7 @@ add rate limiting on `/register` at the reverse-proxy layer.
 - **Short-lived OAuth access tokens** (1 hour) with 30-day refresh tokens,
   vs. non-expiring device-code tokens (no refresh mechanism exists for
   those, so they're long-lived by design — revoke them manually via
-  `npm run tokens -- revoke <id>` if a device is compromised).
+  `pnpm run tokens -- revoke <id>` if a device is compromised).
 
 ## Before you tag a release
 
