@@ -56,14 +56,16 @@ Published images: `sanderboot/mcp-oauth-gate` on Docker Hub.
 ## CI/CD
 
 `.github/workflows/docker-publish.yml` builds on every push/PR, and on
-pushes to `main` or `v*.*.*` tags also builds and pushes a multi-arch image
-to Docker Hub. It needs two repo secrets:
+pushes to `master` or `v*.*.*` tags also builds and pushes a multi-arch
+image to Docker Hub. It needs:
 
-- `DOCKERHUB_USERNAME` — your Docker Hub username
-- `DOCKERHUB_TOKEN` — a Docker Hub access token (Docker Hub → Account
-  Settings → Security → New Access Token — not your login password)
+- `DOCKERHUB_USERNAME` — a repo **variable** (not a secret — it's not
+  sensitive) with your Docker Hub username
+- `DOCKERHUB_TOKEN` — a repo **secret** holding a Docker Hub access token
+  (Docker Hub → Account Settings → Security → New Access Token — not your
+  login password)
 
 ```
-gh secret set DOCKERHUB_USERNAME --body "<your-dockerhub-username>"
+gh variable set DOCKERHUB_USERNAME --body "<your-dockerhub-username>"
 gh secret set DOCKERHUB_TOKEN --body "<your-access-token>"
 ```
