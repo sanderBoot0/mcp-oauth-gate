@@ -14,4 +14,4 @@ COPY --from=build /app/dist ./dist
 COPY package.json ./
 ENV NODE_ENV=production
 EXPOSE 4000
-CMD ["node", "dist/server.js"]
+CMD ["node", "dist/main.js"]
