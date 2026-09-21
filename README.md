@@ -53,6 +53,38 @@ docker run --env-file .env -p 4000:4000 -v gate-data:/data mcp-oauth-gate
 
 Published images: `sanderboot/mcp-oauth-gate` on Docker Hub.
 
+### Docker Compose quickstart
+
+[`examples/docker-compose`](./examples/docker-compose) is a complete,
+verified stack: the gateway, an nginx forward-auth config wired to it, and
+a placeholder protected service (`httpbin`) to swap for your real one.
+
+```
+cd examples/docker-compose
+cp .env.example .env   # fill in AUTH_PROVIDER, CLIENT_ID/SECRET, ALLOWED_EMAILS
+docker compose up
+```
+
+Then `curl http://localhost:8080/mcp` should 401 with a `WWW-Authenticate`
+header pointing at the discovery endpoint — sign in through your identity
+provider to get a token. See
+[`docs/reverse-proxy.md`](./docs/reverse-proxy.md) for the same pattern
+with Traefik, Caddy, or Envoy instead of nginx, and
+[`docs/security-model.md`](./docs/security-model.md) for what this gateway
+does and doesn't defend against before you deploy it for real.
+
+## Testing
+
+```
+npm test
+```
+
+Unit tests cover PKCE verification, refresh-token rotation and
+reuse-detection, and both providers (GitHub against a mocked `fetch`, OIDC
+against a minimal mock IdP with real discovery/JWKS/signed tokens).
+Integration tests drive the full `register → authorize → token → verify →
+refresh → reuse-detected` chain over HTTP.
+
 ## CI/CD
 
 `.github/workflows/docker-publish.yml` builds on every push/PR, and on
