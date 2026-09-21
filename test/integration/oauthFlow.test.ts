@@ -11,7 +11,7 @@ beforeAll(async () => {
     const { createApp } = await import('../../src/server.js');
     const stubProvider: import('../../src/provider.js').Provider = {
         buildAuthUrl: (_redirectUri, state) => `https://idp.test/authorize?state=${encodeURIComponent(state)}`,
-        exchangeCodeForIdentity: async () => ({ email: 'allowed@example.com', emailVerified: true })
+        exchangeCodeForIdentity: () => Promise.resolve({ email: 'allowed@example.com', emailVerified: true })
     };
     app = createApp(stubProvider);
 });
@@ -25,7 +25,10 @@ function pkcePair() {
 /** Drives /register -> /authorize -> (simulated provider callback) -> /oauth/callback -> /token, returning the issued token pair plus enough state to drive a refresh. */
 async function completeAuthorizationCodeFlow(app: import('express').Express) {
     const redirectUri = 'https://mcp-client.test/callback';
-    const registerRes = await request(app).post('/register').send({ redirect_uris: [redirectUri] }).expect(201);
+    const registerRes = await request(app)
+        .post('/register')
+        .send({ redirect_uris: [redirectUri] })
+        .expect(201);
     const clientId = registerRes.body.client_id as string;
 
     const { verifier, challenge } = pkcePair();
@@ -69,13 +72,20 @@ async function completeAuthorizationCodeFlow(app: import('express').Express) {
 
 describe('full OAuth 2.1 chain: register -> authorize -> token -> verify -> refresh -> reuse-detected', () => {
     it('rejects registration with no redirect_uris', async () => {
-        await request(app).post('/register').send({}).expect(400).expect(res => {
-            expect(res.body.error).toBe('invalid_client_metadata');
-        });
+        await request(app)
+            .post('/register')
+            .send({})
+            .expect(400)
+            .expect(res => {
+                expect(res.body.error).toBe('invalid_client_metadata');
+            });
     });
 
     it('rejects /authorize for an unregistered redirect_uri (exact-match enforcement)', async () => {
-        const registerRes = await request(app).post('/register').send({ redirect_uris: ['https://mcp-client.test/cb'] }).expect(201);
+        const registerRes = await request(app)
+            .post('/register')
+            .send({ redirect_uris: ['https://mcp-client.test/cb'] })
+            .expect(201);
         await request(app)
             .get('/authorize')
             .query({

@@ -129,7 +129,9 @@ export function consumeRefreshToken(id: number): void {
 /** Revokes every refresh token in a rotation chain plus the access tokens they minted — used on reuse-of-a-spent-token detection or an explicit device revoke. */
 export function revokeRefreshFamily(familyId: string): void {
     const now = new Date().toISOString();
-    const rows = db.prepare('SELECT access_token_id FROM refresh_tokens WHERE family_id = ?').all(familyId) as { access_token_id: number }[];
+    const rows = db.prepare('SELECT access_token_id FROM refresh_tokens WHERE family_id = ?').all(familyId) as {
+        access_token_id: number;
+    }[];
     db.prepare('UPDATE refresh_tokens SET revoked_at = COALESCE(revoked_at, ?) WHERE family_id = ?').run(now, familyId);
     for (const row of rows) {
         db.prepare('UPDATE tokens SET revoked = 1 WHERE id = ?').run(row.access_token_id);
@@ -139,7 +141,8 @@ export function revokeRefreshFamily(familyId: string): void {
 /** Revokes an access token and, if it was issued via OAuth, the refresh chain that can mint replacements for it. Used by the `tokens revoke` admin command. */
 export function revokeTokenAndFamily(accessTokenId: number): boolean {
     const revoked = revokeToken(accessTokenId);
-    const row = db.prepare('SELECT family_id FROM refresh_tokens WHERE access_token_id = ?').get(accessTokenId) as { family_id: string } | undefined;
+    const row = db.prepare('SELECT family_id FROM refresh_tokens WHERE access_token_id = ?').get(accessTokenId) as
+        { family_id: string } | undefined;
     if (row) revokeRefreshFamily(row.family_id);
     return revoked;
 }

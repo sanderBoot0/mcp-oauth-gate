@@ -4,7 +4,7 @@ import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 /** A minimal mock OIDC IdP: serves discovery, a JWKS, and a token endpoint that mints a signed id_token — just enough for providers/oidc.ts to run against without real network calls or credentials. */
 export class MockOidcIdp {
     private server?: Server;
-    private privateKey?: CryptoKey;
+    private privateKey?: Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
     private kid = 'test-key-1';
     issuer = '';
     nextIdTokenClaims: Record<string, unknown> = { email: 'allowed@example.com', email_verified: true };

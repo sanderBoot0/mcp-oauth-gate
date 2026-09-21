@@ -1,6 +1,6 @@
 import express from 'express';
 import { randomBytes } from 'node:crypto';
-import { PORT, BASE_URL, AUTH_PATH_PREFIX, RESOURCE_URL, ALLOWED_EMAILS } from './env.js';
+import { BASE_URL, AUTH_PATH_PREFIX, RESOURCE_URL, ALLOWED_EMAILS } from './env.js';
 import type { Provider } from './provider.js';
 import { createDeviceRequest, findByUserCode, approve, pollAndConsume } from './deviceFlow.js';
 import { beginAuthorization, completeAuthorization, exchangeCode } from './oauth.js';
@@ -165,7 +165,12 @@ export function createApp(provider: Provider): express.Express {
 
         if (body.grant_type === 'authorization_code') {
             const { code, redirect_uri: redirectUri, client_id: clientId, code_verifier: codeVerifier } = body;
-            if (typeof code !== 'string' || typeof redirectUri !== 'string' || typeof clientId !== 'string' || typeof codeVerifier !== 'string') {
+            if (
+                typeof code !== 'string' ||
+                typeof redirectUri !== 'string' ||
+                typeof clientId !== 'string' ||
+                typeof codeVerifier !== 'string'
+            ) {
                 res.status(400).json({ error: 'invalid_request' });
                 return;
             }

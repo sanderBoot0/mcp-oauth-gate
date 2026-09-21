@@ -47,7 +47,9 @@ describe('githubProvider', () => {
     it('throws when the account has no verified primary email', async () => {
         const fetchMock = vi.mocked(fetch);
         fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'gh-token' }), { status: 200 }));
-        fetchMock.mockResolvedValueOnce(new Response(JSON.stringify([{ email: 'unverified@example.com', primary: true, verified: false }]), { status: 200 }));
+        fetchMock.mockResolvedValueOnce(
+            new Response(JSON.stringify([{ email: 'unverified@example.com', primary: true, verified: false }]), { status: 200 })
+        );
 
         await expect(githubProvider.exchangeCodeForIdentity('some-code', 'https://auth.test/auth/oauth/callback')).rejects.toThrow(
             /no verified primary email/

@@ -7,7 +7,7 @@ can decide whether they hold for your deployment before relying on it.
 
 This is **not** a multi-tenant identity system. There is exactly one trust
 boundary: a flat, operator-configured list of emails (`ALLOWED_EMAILS`).
-Anyone who authenticates with the upstream identity provider *and* whose
+Anyone who authenticates with the upstream identity provider _and_ whose
 verified email is on that list gets a token with full access to the
 protected resource. There is no per-user scoping, no roles, no per-client
 permissions — every allowed user can do everything the protected service
@@ -33,7 +33,7 @@ not an oversight:
   Claude Desktop, etc.) can self-register on first connect without the
   operator manually provisioning each one.
 - This is a widely-used pattern for exactly this kind of single-tenant
-  gateway — public client registration is safe *precisely because* the
+  gateway — public client registration is safe _precisely because_ the
   allowlist, not the registry, is the real gate.
 
 This means anyone can enumerate the `/register` endpoint and accumulate

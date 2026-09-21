@@ -43,7 +43,10 @@ describe('PKCE + authorization code exchange', () => {
         const authId = beginAuthorization({ clientId: 'c1', redirectUri: 'https://client.test/cb', state: 's1', codeChallenge: challenge });
         const completed = completeAuthorization(authId, 'user@example.com');
 
-        expect(exchangeCode(completed!.code, 'other-client', 'https://client.test/cb', verifier)).toEqual({ ok: false, error: 'invalid_grant' });
+        expect(exchangeCode(completed!.code, 'other-client', 'https://client.test/cb', verifier)).toEqual({
+            ok: false,
+            error: 'invalid_grant'
+        });
     });
 
     it('is single-use — the same code cannot be exchanged twice', () => {

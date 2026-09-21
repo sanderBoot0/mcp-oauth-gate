@@ -28,8 +28,7 @@ function randomCode(bytes: number): string {
 
 function randomUserCode(): string {
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
-    const part = () =>
-        Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
+    const part = () => Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
     return `${part()}-${part()}`;
 }
 
@@ -78,10 +77,7 @@ export function approve(userCode: string, rawToken: string, resolvedDeviceName: 
     return true;
 }
 
-export type PollResult =
-    | { status: 'pending' }
-    | { status: 'expired' }
-    | { status: 'approved'; token: string; deviceName: string };
+export type PollResult = { status: 'pending' } | { status: 'expired' } | { status: 'approved'; token: string; deviceName: string };
 
 /** Consumes the token on first successful poll — it's handed to the client exactly once. */
 export function pollAndConsume(deviceCode: string): PollResult {

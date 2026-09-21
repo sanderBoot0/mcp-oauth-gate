@@ -5,11 +5,11 @@ terminates client traffic itself. Your reverse proxy sends it one
 subrequest per incoming request (`/verify`) to ask "is this bearer token
 good?", and routes three route groups:
 
-| Route(s) | Behind `auth_request`/`forwardAuth`? | Notes |
-|---|---|---|
-| `/mcp` (or wherever `RESOURCE_URL` points) | **Yes** | The actual protected service |
-| `/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server` | No | Must be reachable without a token — clients fetch these to learn how to get one |
-| `/auth/*` (login, device-code, DCR, token endpoint) | No | A client doesn't have a token yet when it starts either flow |
+| Route(s)                                                                           | Behind `auth_request`/`forwardAuth`? | Notes                                                                           |
+| ---------------------------------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------- |
+| `/mcp` (or wherever `RESOURCE_URL` points)                                         | **Yes**                              | The actual protected service                                                    |
+| `/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server` | No                                   | Must be reachable without a token — clients fetch these to learn how to get one |
+| `/auth/*` (login, device-code, DCR, token endpoint)                                | No                                   | A client doesn't have a token yet when it starts either flow                    |
 
 The worked example below assumes the gateway is reachable at
 `mcp-oauth-gate:4000` and the protected service at `protected-service:80`
@@ -56,20 +56,20 @@ via labels (or the equivalent dynamic-config YAML):
 
 ```yaml
 services:
-  protected-service:
-    labels:
-      - "traefik.http.routers.mcp.rule=PathPrefix(`/mcp`)"
-      - "traefik.http.routers.mcp.middlewares=mcp-auth"
-      - "traefik.http.middlewares.mcp-auth.forwardauth.address=http://mcp-oauth-gate:4000/verify"
-      - "traefik.http.middlewares.mcp-auth.forwardauth.authResponseHeaders=X-Device-Name,WWW-Authenticate"
+    protected-service:
+        labels:
+            - 'traefik.http.routers.mcp.rule=PathPrefix(`/mcp`)'
+            - 'traefik.http.routers.mcp.middlewares=mcp-auth'
+            - 'traefik.http.middlewares.mcp-auth.forwardauth.address=http://mcp-oauth-gate:4000/verify'
+            - 'traefik.http.middlewares.mcp-auth.forwardauth.authResponseHeaders=X-Device-Name,WWW-Authenticate'
 
-  mcp-oauth-gate:
-    labels:
-      # Discovery + /auth/* stay unauthenticated, same as the nginx example.
-      - "traefik.http.routers.oauth-discovery.rule=PathPrefix(`/.well-known/oauth-`)"
-      - "traefik.http.routers.oauth-auth.rule=PathPrefix(`/auth/`)"
-      - "traefik.http.middlewares.strip-auth-prefix.stripprefix.prefixes=/auth"
-      - "traefik.http.routers.oauth-auth.middlewares=strip-auth-prefix"
+    mcp-oauth-gate:
+        labels:
+            # Discovery + /auth/* stay unauthenticated, same as the nginx example.
+            - 'traefik.http.routers.oauth-discovery.rule=PathPrefix(`/.well-known/oauth-`)'
+            - 'traefik.http.routers.oauth-auth.rule=PathPrefix(`/auth/`)'
+            - 'traefik.http.middlewares.strip-auth-prefix.stripprefix.prefixes=/auth'
+            - 'traefik.http.routers.oauth-auth.middlewares=strip-auth-prefix'
 ```
 
 `authResponseHeaders` must list `WWW-Authenticate` explicitly — unlike

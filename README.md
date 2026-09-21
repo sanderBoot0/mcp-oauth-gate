@@ -22,16 +22,16 @@ decisions.
 
 Copy `.env.example` to `.env` and fill in:
 
-| Variable | Description |
-|---|---|
-| `BASE_URL` | Public URL this gateway is reached at |
-| `RESOURCE_URL` | Canonical URI of the protected resource being guarded |
-| `AUTH_PROVIDER` | `oidc` or `github` |
-| `OIDC_ISSUER_URL` | Issuer base URL (only when `AUTH_PROVIDER=oidc`) |
-| `CLIENT_ID` / `CLIENT_SECRET` | OAuth app credentials from the identity provider |
-| `ALLOWED_EMAILS` | Comma-separated allowlist of verified emails |
-| `DB_PATH` | SQLite path (default `/data/tokens.db`) |
-| `PORT` | Listen port (default `4000`) |
+| Variable                      | Description                                           |
+| ----------------------------- | ----------------------------------------------------- |
+| `BASE_URL`                    | Public URL this gateway is reached at                 |
+| `RESOURCE_URL`                | Canonical URI of the protected resource being guarded |
+| `AUTH_PROVIDER`               | `oidc` or `github`                                    |
+| `OIDC_ISSUER_URL`             | Issuer base URL (only when `AUTH_PROVIDER=oidc`)      |
+| `CLIENT_ID` / `CLIENT_SECRET` | OAuth app credentials from the identity provider      |
+| `ALLOWED_EMAILS`              | Comma-separated allowlist of verified emails          |
+| `DB_PATH`                     | SQLite path (default `/data/tokens.db`)               |
+| `PORT`                        | Listen port (default `4000`)                          |
 
 The redirect/callback URL registered with your identity provider must be
 exactly `${BASE_URL}/auth/oauth/callback`.
@@ -85,11 +85,32 @@ against a minimal mock IdP with real discovery/JWKS/signed tokens).
 Integration tests drive the full `register → authorize → token → verify →
 refresh → reuse-detected` chain over HTTP.
 
+## Linting, formatting, type-checking
+
+```
+npm run lint          # eslint
+npm run format        # prettier --write
+npm run format:check  # prettier --check (used in CI)
+npm run typecheck     # tsc --noEmit, covering src/ and test/
+```
+
+All dependency versions (including `typescript`) are pinned exact in
+`package.json` rather than range-specified, so `npm install` always
+resolves the same tree; use `npm outdated` to see what's behind.
+
+**On TypeScript 7:** `typescript` is pinned to the latest **6.x**
+(`6.0.3`), not the newer TypeScript 7 native compiler. `typescript-eslint`
+(the TS-aware linting engine `npm run lint` depends on) hard-refuses to run
+against TS 7 as of this writing — see
+[typescript-eslint#10940](https://github.com/typescript-eslint/typescript-eslint/issues/10940).
+Revisit once that support lands.
+
 ## CI/CD
 
-`.github/workflows/docker-publish.yml` builds on every push/PR, and on
-pushes to `master` or `v*.*.*` tags also builds and pushes a multi-arch
-image to Docker Hub. It needs:
+`.github/workflows/docker-publish.yml` builds on every push/PR (format
+check, lint, typecheck, build, test), and on pushes to `master` or
+`v*.*.*` tags also builds and pushes a multi-arch image to Docker Hub. It
+needs:
 
 - `DOCKERHUB_USERNAME` — a repo **variable** (not a secret — it's not
   sensitive) with your Docker Hub username
