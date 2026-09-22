@@ -325,6 +325,16 @@ code:
    `0.0.0.0` (or the Docker bridge interface), not just `127.0.0.1`,
    which containers can't reach.
 
+   **If your MCP server is on another machine, that hop has to stay on a
+   trusted private network (a VPN, [Tailscale](#making-it-publicly-reachable-with-tailscale-optional),
+   or an isolated LAN) — never plain HTTP across the open internet or an
+   untrusted network.** The gateway forwards the client's bearer token
+   and all request/response traffic to `UPSTREAM_URL` unmodified; over
+   HTTP that's plaintext, so anyone on that network path can read tokens
+   and data in transit. This isn't specific to a remote machine — the
+   same is true reaching any upstream over plain HTTP — it's just a real
+   risk once that hop leaves your own host or LAN.
+
 2. **Point `UPSTREAM_URL` at it** — scheme, host, and port only, and
    `http://` specifically: the gateway doesn't support an HTTPS upstream
    yet (`docker/docker-entrypoint.sh` rejects `https://` outright, since
