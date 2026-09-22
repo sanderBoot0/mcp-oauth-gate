@@ -303,51 +303,51 @@ code:
    another service on the same `docker-compose` network — it doesn't need
    a `ports:` mapping of its own, only `mcp-oauth-gate` needs to reach it:
 
-   ```yaml
-   services:
-       mcp-oauth-gate:
-           # ... unchanged from the quickstart above ...
+    ```yaml
+    services:
+        mcp-oauth-gate:
+            # ... unchanged from the quickstart above ...
 
-       my-mcp-server:
-           image: your-org/your-mcp-server:latest
-           restart: unless-stopped
-           networks: [internal]
-   ```
+        my-mcp-server:
+            image: your-org/your-mcp-server:latest
+            restart: unless-stopped
+            networks: [internal]
+    ```
 
-   It doesn't have to be a sibling container — any address the gateway's
-   container can reach over plain HTTP works (the bundled nginx rejects
-   an `https://` `UPSTREAM_URL` outright — see step 2), including a
-   service on the host or another machine entirely. To reach a service on
-   the Docker host from Linux, `host.docker.internal` isn't predefined
-   the way it is on Docker Desktop — add
-   `extra_hosts: ["host.docker.internal:host-gateway"]` to the
-   `mcp-oauth-gate` service, and make sure that host service is bound to
-   `0.0.0.0` (or the Docker bridge interface), not just `127.0.0.1`,
-   which containers can't reach.
+    It doesn't have to be a sibling container — any address the gateway's
+    container can reach over plain HTTP works (the bundled nginx rejects
+    an `https://` `UPSTREAM_URL` outright — see step 2), including a
+    service on the host or another machine entirely. To reach a service on
+    the Docker host from Linux, `host.docker.internal` isn't predefined
+    the way it is on Docker Desktop — add
+    `extra_hosts: ["host.docker.internal:host-gateway"]` to the
+    `mcp-oauth-gate` service, and make sure that host service is bound to
+    `0.0.0.0` (or the Docker bridge interface), not just `127.0.0.1`,
+    which containers can't reach.
 
-   **If your MCP server is on another machine, that hop has to stay on a
-   trusted private network (a VPN, [Tailscale](#making-it-publicly-reachable-with-tailscale-optional),
-   or an isolated LAN) — never plain HTTP across the open internet or an
-   untrusted network.** The gateway forwards the client's bearer token
-   and all request/response traffic to `UPSTREAM_URL` unmodified; over
-   HTTP that's plaintext, so anyone on that network path can read tokens
-   and data in transit. This isn't specific to a remote machine — the
-   same is true reaching any upstream over plain HTTP — it's just a real
-   risk once that hop leaves your own host or LAN.
+    **If your MCP server is on another machine, that hop has to stay on a
+    trusted private network (a VPN, [Tailscale](#making-it-publicly-reachable-with-tailscale-optional),
+    or an isolated LAN) — never plain HTTP across the open internet or an
+    untrusted network.** The gateway forwards the client's bearer token
+    and all request/response traffic to `UPSTREAM_URL` unmodified; over
+    HTTP that's plaintext, so anyone on that network path can read tokens
+    and data in transit. This isn't specific to a remote machine — the
+    same is true reaching any upstream over plain HTTP — it's just a real
+    risk once that hop leaves your own host or LAN.
 
 2. **Point `UPSTREAM_URL` at it** — scheme, host, and port only, and
    `http://` specifically: the gateway doesn't support an HTTPS upstream
    yet (`docker/docker-entrypoint.sh` rejects `https://` outright, since
    SNI and certificate verification aren't configured for it):
 
-   ```sh
-   UPSTREAM_URL=http://my-mcp-server:3000
-   ```
+    ```sh
+    UPSTREAM_URL=http://my-mcp-server:3000
+    ```
 
-   The gateway forwards the client's original request path unchanged, so
-   it doesn't need to know in advance whether your server's MCP endpoint
-   lives at `/mcp`, `/`, or anywhere else — whatever path the client
-   requested is what your server sees.
+    The gateway forwards the client's original request path unchanged, so
+    it doesn't need to know in advance whether your server's MCP endpoint
+    lives at `/mcp`, `/`, or anywhere else — whatever path the client
+    requested is what your server sees.
 
 3. **Set `RESOURCE_URL` to the full external URL clients will actually
    connect to** — the exact address, path included, that you'll give
@@ -358,14 +358,14 @@ code:
    — the header itself carries that metadata URL, not `RESOURCE_URL`
    directly), so it has to match:
 
-   ```sh
-   RESOURCE_URL=https://gateway.example.com/mcp
-   ```
+    ```sh
+    RESOURCE_URL=https://gateway.example.com/mcp
+    ```
 
-   If your server answers at the root path instead, use
-   `https://gateway.example.com` — `RESOURCE_URL` just needs to match
-   wherever your server's real endpoint is, it isn't required to end in
-   `/mcp`.
+    If your server answers at the root path instead, use
+    `https://gateway.example.com` — `RESOURCE_URL` just needs to match
+    wherever your server's real endpoint is, it isn't required to end in
+    `/mcp`.
 
 Point your MCP client at `RESOURCE_URL` and you're done — every request
 that reaches your server has already passed authentication, and the
