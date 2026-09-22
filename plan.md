@@ -104,7 +104,7 @@ RESOURCE_URL=https://mcp.example.com/mcp   # the thing being protected — see b
 DB_PATH=/data/tokens.db
 
 `RESOURCE_URL` generalizes what's currently hardcoded to `${BASE_URL}/mcp`
-— the protected-resource identifier (RFC9728/RFC8707) should be whatever
+— the protected-resource identifier (RFC9728) should be whatever
 the actual downstream service's canonical URI is, not assumed to always be
 an MCP endpoint at a fixed path.
 

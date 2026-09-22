@@ -15,9 +15,10 @@ export const PORT = Number(required('PORT', '4000'));
 export const BASE_URL = required('BASE_URL').replace(/\/$/, '');
 
 // The canonical URI of the protected resource this gateway is guarding
-// (RFC9728/RFC8707) — advertised in the protected-resource metadata and the
-// WWW-Authenticate header. Not assumed to be this gateway's own /mcp path;
-// it's whatever the downstream service's real, externally-reachable URI is.
+// (RFC9728, OAuth 2.0 Protected Resource Metadata) — advertised in the
+// protected-resource metadata and the WWW-Authenticate header. Not
+// assumed to be this gateway's own /mcp path; it's whatever the
+// downstream service's real, externally-reachable URI is.
 export const RESOURCE_URL = required('RESOURCE_URL');
 
 export type AuthProvider = 'oidc' | 'github';

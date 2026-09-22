@@ -1,0 +1,45 @@
+# mcp-oauth-gate
+
+> Self-hostable OAuth 2.1 authorization server, bundled with nginx in a
+> single Docker container, that sits directly in front of an existing HTTP
+> service (an MCP — Model Context Protocol — server, or anything else) and
+> turns it into a spec-compliant OAuth 2.1 resource server. Access is
+> gated by a flat, operator-configured allowlist of email addresses
+> checked against a real identity provider (any OIDC-compliant provider,
+> or GitHub) — single-tenant by design, not a multi-tenant identity
+> platform. Not a competitor to oauth2-proxy: smaller, more opinionated,
+> narrower job.
+
+Repository: https://github.com/sanderBoot0/mcp-oauth-gate
+Published image: https://hub.docker.com/r/sanderboot/mcp-oauth-gate
+License: MIT
+
+## Core docs
+
+- [README](https://github.com/sanderBoot0/mcp-oauth-gate/blob/master/README.md): what this is, architecture, the full OAuth flow, a complete docker-compose quickstart, configuration reference, the RFCs implemented.
+- [Security model](https://github.com/sanderBoot0/mcp-oauth-gate/blob/master/docs/security-model.md): the single-tenant/allowlist assumption, why Dynamic Client Registration is intentionally unauthenticated, what is and isn't defended against.
+- [Reverse proxy setup](https://github.com/sanderBoot0/mcp-oauth-gate/blob/master/docs/reverse-proxy.md): putting an optional external proxy in front for TLS termination.
+- [Contributing](https://github.com/sanderBoot0/mcp-oauth-gate/blob/master/CONTRIBUTING.md): building, testing, linting, CI/CD, and Dependabot internals for this project itself.
+- [Project plan](https://github.com/sanderBoot0/mcp-oauth-gate/blob/master/plan.md): phases, the architecture pivot to bundled nginx, and open decisions.
+
+## For an MCP client or agent connecting to a deployed instance
+
+Discover how to authenticate via the standard OAuth metadata endpoints —
+no project-specific documentation needed at runtime:
+
+- `GET /.well-known/oauth-protected-resource` (RFC 9728) — the protected resource's canonical URI and which authorization server protects it.
+- `GET /.well-known/oauth-authorization-server` (RFC 8414) — the `/authorize`, `/token`, and `/register` endpoints, supported grant types and PKCE methods.
+- An unauthenticated request to the protected resource returns `401` with `WWW-Authenticate: Bearer resource_metadata="<protected-resource-metadata-url>"`.
+
+Standard OAuth 2.1 authorization-code flow with PKCE (RFC 7636) and
+Dynamic Client Registration (RFC 7591) from there; a device-code fallback
+(RFC 8628, at `/device/code` and `/device/token`) exists for clients that
+don't speak OAuth discovery but is not itself advertised in the discovery
+metadata.
+
+## Key facts for automated setup
+
+- One environment variable most deployments actually need beyond auth config: `UPSTREAM_URL` — the internal address (scheme+host+port only, no path) of the service being protected.
+- Ships as a single container exposing port 80 (HTTP only; TLS termination, if needed, is external).
+- `AUTH_PROVIDER=oidc` works with any OIDC-compliant identity provider via discovery (Google, Microsoft/Azure AD, Okta, Auth0, Keycloak, Authentik, GitLab, ...); `AUTH_PROVIDER=github` is a hardcoded special case since GitHub's OAuth isn't OIDC-compliant.
+- Access control is a comma-separated `ALLOWED_EMAILS` allowlist — there is no per-user authorization beyond that.
