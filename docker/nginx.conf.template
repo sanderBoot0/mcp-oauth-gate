@@ -98,6 +98,14 @@ http {
             proxy_http_version 1.1;
             proxy_set_header Connection "";
             proxy_set_header X-Device-Name $device_name;
+            # $upstream_url is always http:// here — docker-entrypoint.sh
+            # rejects an https:// UPSTREAM_URL before this file is even
+            # generated, specifically because proxy_ssl_server_name/
+            # proxy_ssl_verify aren't configured below (no SNI, no upstream
+            # certificate verification), so an HTTPS upstream would connect
+            # "successfully" while silently skipping both. If HTTPS upstream
+            # support is ever added, it needs both of those configured, not
+            # just allowing the scheme through.
             proxy_pass $upstream_url;
         }
     }
