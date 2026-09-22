@@ -1,9 +1,14 @@
 import { createHash } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
+import { z } from 'zod';
 import { setTestEnv } from '../helpers/testEnv.js';
 
 setTestEnv();
+
+const RegisterResponseSchema = z.object({ client_id: z.string() });
+const ErrorResponseSchema = z.object({ error: z.string() });
+const TokenPairResponseSchema = z.object({ access_token: z.string(), refresh_token: z.string() });
 
 let app: import('express').Express;
 
@@ -29,7 +34,7 @@ async function completeAuthorizationCodeFlow(app: import('express').Express) {
         .post('/register')
         .send({ redirect_uris: [redirectUri] })
         .expect(201);
-    const clientId = registerRes.body.client_id as string;
+    const { client_id: clientId } = RegisterResponseSchema.parse(registerRes.body);
 
     const { verifier, challenge } = pkcePair();
     const authorizeRes = await request(app)
@@ -67,7 +72,7 @@ async function completeAuthorizationCodeFlow(app: import('express').Express) {
         .send({ grant_type: 'authorization_code', code, redirect_uri: redirectUri, client_id: clientId, code_verifier: verifier })
         .expect(200);
 
-    return { clientId, redirectUri, tokens: tokenRes.body as { access_token: string; refresh_token: string } };
+    return { clientId, redirectUri, tokens: TokenPairResponseSchema.parse(tokenRes.body) };
 }
 
 describe('full OAuth 2.1 chain: register -> authorize -> token -> verify -> refresh -> reuse-detected', () => {
@@ -77,7 +82,22 @@ describe('full OAuth 2.1 chain: register -> authorize -> token -> verify -> refr
             .send({})
             .expect(400)
             .expect(res => {
-                expect(res.body.error).toBe('invalid_client_metadata');
+                expect(ErrorResponseSchema.parse(res.body).error).toBe('invalid_client_metadata');
+            });
+    });
+
+    it('rejects registration with a mixed-type redirect_uris array instead of silently dropping the bad entry', async () => {
+        // Regression test: this used to filter out the non-string entry
+        // and register the client with whatever valid ones were left.
+        // zod validation now rejects the whole request instead — this
+        // pins that contract so a future schema change can't silently
+        // restore the old filtering behavior.
+        await request(app)
+            .post('/register')
+            .send({ redirect_uris: ['https://client.test/cb', 123] })
+            .expect(400)
+            .expect(res => {
+                expect(ErrorResponseSchema.parse(res.body).error).toBe('invalid_client_metadata');
             });
     });
 
@@ -86,10 +106,11 @@ describe('full OAuth 2.1 chain: register -> authorize -> token -> verify -> refr
             .post('/register')
             .send({ redirect_uris: ['https://mcp-client.test/cb'] })
             .expect(201);
+        const { client_id: clientId } = RegisterResponseSchema.parse(registerRes.body);
         await request(app)
             .get('/authorize')
             .query({
-                client_id: registerRes.body.client_id,
+                client_id: clientId,
                 redirect_uri: 'https://attacker.test/cb',
                 response_type: 'code',
                 code_challenge: 'x',
@@ -109,7 +130,7 @@ describe('full OAuth 2.1 chain: register -> authorize -> token -> verify -> refr
             .type('form')
             .send({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: clientId })
             .expect(200);
-        const rotated = refreshRes.body as { access_token: string; refresh_token: string };
+        const rotated = TokenPairResponseSchema.parse(refreshRes.body);
         expect(rotated.access_token).not.toBe(tokens.access_token);
         expect(rotated.refresh_token).not.toBe(tokens.refresh_token);
 
@@ -121,7 +142,7 @@ describe('full OAuth 2.1 chain: register -> authorize -> token -> verify -> refr
             .type('form')
             .send({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: clientId })
             .expect(400)
-            .expect(res => expect(res.body.error).toBe('invalid_grant'));
+            .expect(res => expect(ErrorResponseSchema.parse(res.body).error).toBe('invalid_grant'));
 
         // ...and it must have revoked the *entire* family, including the access token minted by the legitimate rotation.
         await request(app).get('/verify').set('Authorization', `Bearer ${rotated.access_token}`).expect(401);

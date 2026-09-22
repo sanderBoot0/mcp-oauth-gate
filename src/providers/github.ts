@@ -1,9 +1,24 @@
+import { z } from 'zod';
 import { CLIENT_ID, CLIENT_SECRET } from '../env.js';
 import type { Provider } from '../provider.js';
 
 const AUTH_ENDPOINT = 'https://github.com/login/oauth/authorize';
 const TOKEN_ENDPOINT = 'https://github.com/login/oauth/access_token';
 const EMAILS_ENDPOINT = 'https://api.github.com/user/emails';
+
+const GithubTokenResponseSchema = z.object({
+    access_token: z.string().optional(),
+    error: z.string().optional(),
+    error_description: z.string().optional()
+});
+
+const GithubEmailsResponseSchema = z.array(
+    z.object({
+        email: z.string(),
+        primary: z.boolean(),
+        verified: z.boolean()
+    })
+);
 
 // GitHub's OAuth isn't OIDC-compliant (no id_token) so it needs its own
 // REST-based identity lookup instead of the generic JWT/JWKS verification
@@ -38,7 +53,7 @@ export const githubProvider: Provider = {
         if (!tokenRes.ok) {
             throw new Error(`GitHub token exchange failed: ${tokenRes.status} ${await tokenRes.text()}`);
         }
-        const tokenBody = (await tokenRes.json()) as { access_token?: string; error?: string; error_description?: string };
+        const tokenBody = GithubTokenResponseSchema.parse(await tokenRes.json());
         if (!tokenBody.access_token) {
             throw new Error(`GitHub token exchange had no access_token: ${tokenBody.error ?? ''} ${tokenBody.error_description ?? ''}`);
         }
@@ -54,7 +69,7 @@ export const githubProvider: Provider = {
         if (!emailsRes.ok) {
             throw new Error(`GitHub emails lookup failed: ${emailsRes.status} ${await emailsRes.text()}`);
         }
-        const emails = (await emailsRes.json()) as { email: string; primary: boolean; verified: boolean }[];
+        const emails = GithubEmailsResponseSchema.parse(await emailsRes.json());
         const primary = emails.find(e => e.primary && e.verified);
         if (!primary) {
             throw new Error('GitHub account has no verified primary email');

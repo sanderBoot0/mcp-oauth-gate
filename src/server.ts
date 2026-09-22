@@ -1,5 +1,6 @@
 import express from 'express';
 import { randomBytes } from 'node:crypto';
+import { z } from 'zod';
 import { BASE_URL, AUTH_PATH_PREFIX, RESOURCE_URL, ALLOWED_EMAILS } from './env.js';
 import type { Provider } from './provider.js';
 import { createDeviceRequest, findByUserCode, approve, pollAndConsume } from './deviceFlow.js';
@@ -28,6 +29,61 @@ const REDIRECT_URI = `${BASE_URL}${AUTH_PATH_PREFIX}/oauth/callback`;
 // token, no client to silently retry) stay non-expiring, unchanged.
 const ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+// A query/body field that's optional in practice: missing or the wrong
+// type both just fall back to `fallback`, exactly like the old
+// `typeof x === 'string' ? x : fallback` checks this replaces.
+const looseString = (fallback = '') => z.string().catch(fallback);
+
+const RegisterBodySchema = z.object({
+    redirect_uris: z.array(z.string()).min(1),
+    // Old behavior truncated an over-long name rather than rejecting the
+    // request; preserved here instead of tightening it, since a client
+    // sending 101 characters isn't a metadata error worth failing over.
+    client_name: z
+        .string()
+        .min(1)
+        .transform(v => v.slice(0, 100))
+        .catch('Unnamed MCP client')
+});
+
+const AuthorizeQuerySchema = z.object({
+    client_id: looseString(),
+    redirect_uri: looseString(),
+    response_type: looseString(),
+    code_challenge: looseString(),
+    code_challenge_method: looseString(),
+    state: looseString()
+});
+
+const RegisteredRedirectUrisSchema = z.array(z.string());
+
+const AuthCodeGrantSchema = z.object({
+    grant_type: z.literal('authorization_code'),
+    code: z.string(),
+    redirect_uri: z.string(),
+    client_id: z.string(),
+    code_verifier: z.string()
+});
+
+const RefreshGrantSchema = z.object({
+    grant_type: z.literal('refresh_token'),
+    refresh_token: z.string(),
+    client_id: z.string()
+});
+
+// Reads just enough of the body to dispatch on grant_type; falls back to
+// '' (matching neither grant schema, so the handler's default branch
+// applies) for a missing/malformed body instead of throwing.
+const GrantTypeSchema = z.object({ grant_type: looseString() }).catch({ grant_type: '' });
+
+const DeviceCodeBodySchema = z.object({ client_hint: looseString('unnamed-device') }).catch({ client_hint: 'unnamed-device' });
+
+const DeviceTokenBodySchema = z.object({ device_code: z.string() });
+
+const UserCodeQuerySchema = z.object({ user_code: looseString() }).catch({ user_code: '' });
+
+const CallbackQuerySchema = z.object({ code: looseString(), state: looseString() }).catch({ code: '', state: '' });
 
 function getCookie(req: express.Request, name: string): string | undefined {
     const header = req.headers.cookie;
@@ -109,14 +165,19 @@ export function createApp(provider: Provider): express.Express {
     // identity-provider login + allowlist check in /oauth/callback.
 
     app.post('/register', (req, res) => {
-        const body = req.body ?? {};
-        const redirectUris = Array.isArray(body.redirect_uris) ? body.redirect_uris.filter((u: unknown) => typeof u === 'string') : [];
-        if (redirectUris.length === 0) {
-            res.status(400).json({ error: 'invalid_client_metadata', error_description: 'redirect_uris is required' });
+        const parsed = RegisterBodySchema.safeParse(req.body);
+        if (!parsed.success) {
+            // Covers all three ways this can fail — missing, empty, or
+            // containing a non-string entry — since client_name alone
+            // never fails validation (it falls back via `.catch()`).
+            res.status(400).json({
+                error: 'invalid_client_metadata',
+                error_description: 'redirect_uris must be a non-empty array of strings'
+            });
             return;
         }
+        const { redirect_uris: redirectUris, client_name: clientName } = parsed.data;
         const clientId = randomBytes(16).toString('hex');
-        const clientName = typeof body.client_name === 'string' && body.client_name ? body.client_name.slice(0, 100) : 'Unnamed MCP client';
         insertOAuthClient(clientId, clientName, redirectUris);
         res.status(201).json({
             client_id: clientId,
@@ -131,19 +192,23 @@ export function createApp(provider: Provider): express.Express {
     // --- Authorization endpoint: hands off to the identity provider, same as /device/authorize ---
 
     app.get('/authorize', (req, res) => {
-        const clientId = typeof req.query.client_id === 'string' ? req.query.client_id : '';
-        const redirectUri = typeof req.query.redirect_uri === 'string' ? req.query.redirect_uri : '';
+        const {
+            client_id: clientId,
+            redirect_uri: redirectUri,
+            response_type: responseType,
+            code_challenge: codeChallenge,
+            code_challenge_method: codeChallengeMethod,
+            state: clientState
+        } = AuthorizeQuerySchema.parse(req.query);
         const client = findOAuthClient(clientId);
-        const registeredRedirects: string[] = client ? JSON.parse(client.redirect_uris) : [];
+        const registeredRedirects = client ? RegisteredRedirectUrisSchema.parse(JSON.parse(client.redirect_uris)) : [];
         if (!client || !registeredRedirects.includes(redirectUri)) {
             // Can't safely redirect back to an unverified redirect_uri — show an error page instead.
             res.status(400).send(errorPage('Unknown client or redirect URI. The MCP client may need to reconnect so it re-registers.'));
             return;
         }
 
-        const clientState = typeof req.query.state === 'string' ? req.query.state : '';
-        const codeChallenge = typeof req.query.code_challenge === 'string' ? req.query.code_challenge : '';
-        const isValid = req.query.response_type === 'code' && codeChallenge && req.query.code_challenge_method === 'S256';
+        const isValid = responseType === 'code' && codeChallenge && codeChallengeMethod === 'S256';
         if (!isValid) {
             const err = new URL(redirectUri);
             err.searchParams.set('error', 'invalid_request');
@@ -161,19 +226,15 @@ export function createApp(provider: Provider): express.Express {
     // --- Token endpoint: authorization_code + PKCE only (public client, no secret) ---
 
     app.post('/token', (req, res) => {
-        const body = req.body ?? {};
+        const { grant_type: grantType } = GrantTypeSchema.parse(req.body);
 
-        if (body.grant_type === 'authorization_code') {
-            const { code, redirect_uri: redirectUri, client_id: clientId, code_verifier: codeVerifier } = body;
-            if (
-                typeof code !== 'string' ||
-                typeof redirectUri !== 'string' ||
-                typeof clientId !== 'string' ||
-                typeof codeVerifier !== 'string'
-            ) {
+        if (grantType === 'authorization_code') {
+            const parsed = AuthCodeGrantSchema.safeParse(req.body);
+            if (!parsed.success) {
                 res.status(400).json({ error: 'invalid_request' });
                 return;
             }
+            const { code, redirect_uri: redirectUri, client_id: clientId, code_verifier: codeVerifier } = parsed.data;
             const result = exchangeCode(code, clientId, redirectUri, codeVerifier);
             if (!result.ok) {
                 res.status(400).json({ error: result.error });
@@ -183,12 +244,13 @@ export function createApp(provider: Provider): express.Express {
             return;
         }
 
-        if (body.grant_type === 'refresh_token') {
-            const { refresh_token: refreshToken, client_id: clientId } = body;
-            if (typeof refreshToken !== 'string' || typeof clientId !== 'string') {
+        if (grantType === 'refresh_token') {
+            const parsed = RefreshGrantSchema.safeParse(req.body);
+            if (!parsed.success) {
                 res.status(400).json({ error: 'invalid_request' });
                 return;
             }
+            const { refresh_token: refreshToken, client_id: clientId } = parsed.data;
             const row = findRefreshTokenByHash(hashToken(refreshToken));
             if (!row || row.client_id !== clientId) {
                 res.status(400).json({ error: 'invalid_grant' });
@@ -218,7 +280,7 @@ export function createApp(provider: Provider): express.Express {
     // --- Device-code flow: called by MCP clients (VS Code, etc.) ---
 
     app.post('/device/code', (req, res) => {
-        const clientHint = typeof req.body?.client_hint === 'string' ? req.body.client_hint : 'unnamed-device';
+        const { client_hint: clientHint } = DeviceCodeBodySchema.parse(req.body);
         const { deviceCode, userCode, expiresIn, interval } = createDeviceRequest(clientHint);
         const verificationUri = `${BASE_URL}${AUTH_PATH_PREFIX}/device`;
         res.json({
@@ -232,12 +294,12 @@ export function createApp(provider: Provider): express.Express {
     });
 
     app.post('/device/token', (req, res) => {
-        const deviceCode = req.body?.device_code;
-        if (typeof deviceCode !== 'string') {
+        const parsed = DeviceTokenBodySchema.safeParse(req.body);
+        if (!parsed.success) {
             res.status(400).json({ error: 'invalid_request' });
             return;
         }
-        const result = pollAndConsume(deviceCode);
+        const result = pollAndConsume(parsed.data.device_code);
         if (result.status === 'pending') {
             res.status(400).json({ error: 'authorization_pending' });
         } else if (result.status === 'expired') {
@@ -250,7 +312,7 @@ export function createApp(provider: Provider): express.Express {
     // --- Browser-facing approval flow ---
 
     app.get('/device', (req, res) => {
-        const userCode = typeof req.query.user_code === 'string' ? req.query.user_code.toUpperCase() : '';
+        const userCode = UserCodeQuerySchema.parse(req.query).user_code.toUpperCase();
         if (!userCode) {
             res.send(deviceCodeForm(''));
             return;
@@ -264,7 +326,7 @@ export function createApp(provider: Provider): express.Express {
     });
 
     app.get('/device/authorize', (req, res) => {
-        const userCode = typeof req.query.user_code === 'string' ? req.query.user_code.toUpperCase() : '';
+        const userCode = UserCodeQuerySchema.parse(req.query).user_code.toUpperCase();
         const found = userCode ? findByUserCode(userCode) : undefined;
         if (!found) {
             res.status(400).send(errorPage('That code is invalid or has expired.'));
@@ -282,10 +344,9 @@ export function createApp(provider: Provider): express.Express {
     // serve both.
     app.get('/oauth/callback', async (req, res) => {
         try {
-            const code = req.query.code;
-            const state = req.query.state;
-            const parts = typeof state === 'string' ? state.split(':') : [];
-            if (typeof code !== 'string' || parts.length !== 3) {
+            const { code, state } = CallbackQuerySchema.parse(req.query);
+            const parts = state.split(':');
+            if (!code || parts.length !== 3) {
                 res.status(400).send(errorPage('Malformed callback from the identity provider.'));
                 return;
             }
