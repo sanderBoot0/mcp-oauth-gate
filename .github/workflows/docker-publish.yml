@@ -7,6 +7,15 @@ on:
     pull_request:
         branches: [master]
 
+# Serialize runs per ref so two rapid master pushes can't race: without
+# this, an older run finishing after a newer one could push its Docker Hub
+# README/description sync last and silently overwrite the newer content.
+# Not cancel-in-progress — a run already pushing images/creating a release
+# should finish rather than being killed mid-way.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: false
+
 jobs:
     build-check:
         runs-on: ubuntu-latest
@@ -107,6 +116,36 @@ jobs:
                   labels: ${{ steps.meta.outputs.labels }}
                   cache-from: type=gha
                   cache-to: type=gha,mode=max
+
+            # Docker Hub renders the description standalone, with no base
+            # path — README.md's repo-relative links (./docs/..., ./LICENSE.md,
+            # etc.) would 404 there, so rewrite them to absolute GitHub blob
+            # URLs before syncing rather than pushing the file verbatim.
+            # dockerhub-description is a Docker container action — only
+            # $GITHUB_WORKSPACE is mounted into it, not the runner's /tmp —
+            # so the generated file has to live under the workspace.
+            #
+            # Only on an actual push to master, not a version tag — a tag
+            # can be cut from an older commit, and syncing there would
+            # overwrite the overview with whatever README that commit had
+            # instead of the current one.
+            - name: Rewrite relative links for Docker Hub
+              if: github.ref == 'refs/heads/master'
+              run: |
+                  sed -E \
+                      -e 's#\]\(\./examples/docker-compose\)#](https://github.com/sanderBoot0/mcp-oauth-gate/tree/master/examples/docker-compose)#g' \
+                      -e 's#\]\(\./#](https://github.com/sanderBoot0/mcp-oauth-gate/blob/master/#g' \
+                      README.md > dockerhub-readme.md
+
+            - name: Sync Docker Hub repo overview
+              if: github.ref == 'refs/heads/master'
+              uses: peter-evans/dockerhub-description@v4
+              with:
+                  username: ${{ vars.DOCKERHUB_USERNAME }}
+                  password: ${{ secrets.DOCKERHUB_TOKEN }}
+                  repository: sanderboot/mcp-oauth-gate
+                  short-description: 'Self-hostable OAuth 2.1 gateway: real login (OIDC/GitHub) in front of an MCP server or HTTP service.'
+                  readme-filepath: dockerhub-readme.md
 
     # Only fires on an actual version tag (not every master push) — cutting
     # a release is a deliberate act: push a `vX.Y.Z` tag when you want one,
