@@ -1,7 +1,32 @@
 {
     "name": "mcp-oauth-gate",
     "version": "0.1.0",
-    "description": "Self-hostable OAuth 2.1 authorization server + forward-auth gateway for MCP servers and other HTTP services.",
+    "description": "Self-hostable OAuth 2.1 authorization server, in one container, for putting real login (Google/Okta/GitHub/any OIDC provider) in front of an MCP server or any other HTTP service.",
+    "keywords": [
+        "mcp",
+        "model-context-protocol",
+        "oauth",
+        "oauth2",
+        "oauth2.1",
+        "authorization-server",
+        "authentication",
+        "pkce",
+        "dynamic-client-registration",
+        "device-authorization-grant",
+        "oidc",
+        "openid-connect",
+        "nginx",
+        "docker",
+        "self-hosted"
+    ],
+    "homepage": "https://github.com/sanderBoot0/mcp-oauth-gate#readme",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/sanderBoot0/mcp-oauth-gate.git"
+    },
+    "bugs": {
+        "url": "https://github.com/sanderBoot0/mcp-oauth-gate/issues"
+    },
     "license": "MIT",
     "private": true,
     "type": "module",
