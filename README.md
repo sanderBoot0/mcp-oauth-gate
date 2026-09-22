@@ -328,12 +328,15 @@ code:
     **If your MCP server is on another machine, that hop has to stay on a
     trusted private network (a VPN, [Tailscale](#making-it-publicly-reachable-with-tailscale-optional),
     or an isolated LAN) — never plain HTTP across the open internet or an
-    untrusted network.** The gateway forwards the client's bearer token
-    and all request/response traffic to `UPSTREAM_URL` unmodified; over
-    HTTP that's plaintext, so anyone on that network path can read tokens
-    and data in transit. This isn't specific to a remote machine — the
-    same is true reaching any upstream over plain HTTP — it's just a real
-    risk once that hop leaves your own host or LAN.
+    untrusted network.** The gateway passes the client's bearer token and
+    the request/response bodies through to `UPSTREAM_URL` as-is — it
+    doesn't strip or re-encrypt them — so over plain HTTP both are
+    plaintext on that network hop, readable to anyone on the path. This
+    isn't specific to a remote machine — the same is true reaching any
+    upstream over plain HTTP — it's just a real risk once that hop leaves
+    your own host or LAN. (Some request headers _are_ rewritten in
+    transit — `Connection` is cleared and an `X-Device-Name` header is
+    injected, see below — but the token and payload aren't among them.)
 
 2. **Point `UPSTREAM_URL` at it** — scheme, host, and port only, and
    `http://` specifically: the gateway doesn't support an HTTPS upstream
@@ -367,14 +370,20 @@ code:
     wherever your server's real endpoint is, it isn't required to end in
     `/mcp`.
 
-Point your MCP client at `RESOURCE_URL` and you're done — every request
-that reaches your server has already passed authentication, and the
-gateway forwards an `X-Device-Name` header identifying which device made
-the request (the name given during the device-code flow, or
-`oauth:<client name>` for a client that registered via standard OAuth) if
-your server wants it for logging or per-device behavior. It's purely
-informational — your server doesn't need to check it, or anything else,
-for the request to already be authorized.
+Point your MCP client at `RESOURCE_URL` and you're done — **the gateway
+is the entire protection boundary**: every request that reaches your
+server has already been checked against a valid token, and your server
+doesn't need to do anything else to enforce that.
+
+The gateway also injects an `X-Device-Name` header naming which device
+made the request (the name given during the device-code flow, or
+`oauth:<client name>` for a client that registered via standard OAuth),
+if your server wants it for logging or per-device behavior. Treat it as
+**untrusted, informational metadata, not part of the protection
+boundary** — the device-code name comes from client-supplied input at
+token-issuance time, so it's not sanitized against your server's own
+assumptions (don't use it for access-control decisions, and escape it
+before rendering it anywhere).
 
 ## Running it yourself
 
