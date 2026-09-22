@@ -143,6 +143,30 @@ gh variable set DOCKERHUB_USERNAME --body "<your-dockerhub-username>"
 gh secret set DOCKERHUB_TOKEN --body "<your-access-token>"
 ```
 
+### Dependabot auto-merge
+
+`.github/dependabot.yml` opens weekly PRs for npm (devDependencies grouped
+into one, patch/minor only — a major bump gets its own separate PR),
+Docker base image, and GitHub Actions updates.
+`.github/workflows/dependabot-auto-merge.yml` approves and enables
+auto-merge for patch/minor Dependabot PRs; major bumps are always left for
+manual review.
+
+**"Enable auto-merge" only queues the merge for once CI passes — it
+doesn't skip CI.** But that's only true if `master` actually has required
+status checks configured; without them, GitHub merges as soon as the PR is
+otherwise mergeable, whether or not `build-check`/`smoke-test` finished.
+Two one-time repo settings, done through the GitHub UI (not something this
+workflow can set for you):
+
+1. **Settings → General → Pull Requests → check "Allow auto-merge".**
+2. **Settings → Branches → add a branch protection rule for `master`** with
+   "Require status checks to pass before merging" and both `build-check`
+   and `smoke-test` selected as required checks.
+
+Without step 2, treat "auto-merge enabled" as "will merge shortly" rather
+than "will merge once green."
+
 ## Package manager
 
 This repo uses [pnpm](https://pnpm.io/), pinned via `packageManager` in

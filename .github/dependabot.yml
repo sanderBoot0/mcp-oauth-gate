@@ -7,9 +7,14 @@ updates:
       # Versions are pinned exact (see README) so every bump — patch
       # included — needs an explicit PR rather than silently widening a range.
       versioning-strategy: increase
+      # Split so a stray major bump doesn't block the whole group's
+      # auto-merge (.github/workflows/dependabot-auto-merge.yml): a major
+      # update is excluded from this group and instead opens its own PR,
+      # which the auto-merge workflow leaves for manual review.
       groups:
           dev-dependencies:
               dependency-type: 'development'
+              update-types: ['minor', 'patch']
 
     - package-ecosystem: 'docker'
       directory: '/'
