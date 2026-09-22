@@ -112,12 +112,15 @@ jobs:
             # path — README.md's repo-relative links (./docs/..., ./LICENSE.md,
             # etc.) would 404 there, so rewrite them to absolute GitHub blob
             # URLs before syncing rather than pushing the file verbatim.
+            # dockerhub-description is a Docker container action — only
+            # $GITHUB_WORKSPACE is mounted into it, not the runner's /tmp —
+            # so the generated file has to live under the workspace.
             - name: Rewrite relative links for Docker Hub
               run: |
                   sed -E \
                       -e 's#\]\(\./examples/docker-compose\)#](https://github.com/sanderBoot0/mcp-oauth-gate/tree/master/examples/docker-compose)#g' \
                       -e 's#\]\(\./#](https://github.com/sanderBoot0/mcp-oauth-gate/blob/master/#g' \
-                      README.md > /tmp/dockerhub-readme.md
+                      README.md > dockerhub-readme.md
 
             - name: Sync Docker Hub repo overview
               uses: peter-evans/dockerhub-description@v4
@@ -126,4 +129,4 @@ jobs:
                   password: ${{ secrets.DOCKERHUB_TOKEN }}
                   repository: sanderboot/mcp-oauth-gate
                   short-description: 'Self-hostable OAuth 2.1 gateway: real login (OIDC/GitHub) in front of an MCP server or HTTP service.'
-                  readme-filepath: /tmp/dockerhub-readme.md
+                  readme-filepath: dockerhub-readme.md
