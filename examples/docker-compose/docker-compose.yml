@@ -17,6 +17,7 @@ services:
             UPSTREAM_URL: ${UPSTREAM_URL}
             AUTH_PROVIDER: ${AUTH_PROVIDER}
             OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+            TRUSTED_PROXY_CIDR: ${TRUSTED_PROXY_CIDR:-}
             CLIENT_ID: ${CLIENT_ID}
             CLIENT_SECRET: ${CLIENT_SECRET}
             ALLOWED_EMAILS: ${ALLOWED_EMAILS}

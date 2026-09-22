@@ -13,6 +13,12 @@ The examples below assume the container is reachable at
 `mcp-oauth-gate:80` (matching [`examples/docker-compose`](../examples/docker-compose))
 and terminate TLS for `auth.example.com` — swap in your real hostname.
 
+**Set `TRUSTED_PROXY_CIDR`** to this proxy's IP/CIDR on the gateway
+container once you add one. Without it, the bundled nginx's rate limiting
+sees every request as coming from the proxy's address (not the real
+client), so all your actual users share one rate-limit bucket instead of
+getting their own.
+
 ## nginx
 
 ```nginx
@@ -24,6 +30,7 @@ server {
 
     location / {
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_pass http://mcp-oauth-gate:80;
     }
 }
@@ -48,7 +55,10 @@ auth.example.com {
 }
 ```
 
-Caddy handles TLS (via automatic ACME) with no further config.
+Caddy handles TLS (via automatic ACME) with no further config. Both Caddy
+and Traefik send `X-Forwarded-For` by default (unlike nginx above, which
+needs it set explicitly) — `TRUSTED_PROXY_CIDR` is the only thing left to
+configure on the gateway side.
 
 ## If you're migrating from an older forward-auth-based setup
 

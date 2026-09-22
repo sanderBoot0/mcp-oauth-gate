@@ -192,16 +192,17 @@ proxy to this container, nothing gateway-specific to configure there.
 
 Copy `.env.example` to `.env` and fill in:
 
-| Variable                      | Description                                                                                                                                                        |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `BASE_URL`                    | Public URL this gateway is reached at                                                                                                                              |
-| `RESOURCE_URL`                | Canonical URI of the protected resource being guarded                                                                                                              |
-| `UPSTREAM_URL`                | Internal address of the service being protected — scheme+host+port only, e.g. `http://mcp-server:3000` (no path: the original request path is forwarded unchanged) |
-| `AUTH_PROVIDER`               | `oidc` (any OIDC-compliant provider) or `github`                                                                                                                   |
-| `OIDC_ISSUER_URL`             | Issuer base URL (only when `AUTH_PROVIDER=oidc`), e.g. `https://accounts.google.com`                                                                               |
-| `CLIENT_ID` / `CLIENT_SECRET` | OAuth app credentials from the identity provider                                                                                                                   |
-| `ALLOWED_EMAILS`              | Comma-separated allowlist of verified emails — this _is_ your entire access-control list                                                                           |
-| `DB_PATH`                     | SQLite path (default `/data/tokens.db`)                                                                                                                            |
+| Variable                      | Description                                                                                                                                                                               |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BASE_URL`                    | Public URL this gateway is reached at                                                                                                                                                     |
+| `RESOURCE_URL`                | Canonical URI of the protected resource being guarded                                                                                                                                     |
+| `UPSTREAM_URL`                | Internal address of the service being protected — scheme+host+port only, e.g. `http://mcp-server:3000` (no path: the original request path is forwarded unchanged)                        |
+| `AUTH_PROVIDER`               | `oidc` (any OIDC-compliant provider) or `github`                                                                                                                                          |
+| `OIDC_ISSUER_URL`             | Issuer base URL (only when `AUTH_PROVIDER=oidc`), e.g. `https://accounts.google.com`                                                                                                      |
+| `CLIENT_ID` / `CLIENT_SECRET` | OAuth app credentials from the identity provider                                                                                                                                          |
+| `ALLOWED_EMAILS`              | Comma-separated allowlist of verified emails — this _is_ your entire access-control list                                                                                                  |
+| `DB_PATH`                     | SQLite path (default `/data/tokens.db`)                                                                                                                                                   |
+| `TRUSTED_PROXY_CIDR`          | Optional — only if you put another reverse proxy in front (see [`docs/reverse-proxy.md`](./docs/reverse-proxy.md)); its IP/CIDR, so rate limiting sees real clients instead of that proxy |
 
 The redirect/callback URL registered with your identity provider must be
 exactly `${BASE_URL}/oauth/callback`.
