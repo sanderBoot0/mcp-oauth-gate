@@ -239,8 +239,8 @@ ALLOWED_EMAILS=
 ```
 
 Fill in `CLIENT_ID`/`CLIENT_SECRET` with an OAuth app registered with
-your identity provider (redirect URI `${BASE_URL}/callback`, i.e.
-`http://localhost:8080/callback` for this example), and `ALLOWED_EMAILS`
+your identity provider (redirect URI `${BASE_URL}/oauth/callback`, i.e.
+`http://localhost:8080/oauth/callback` for this example), and `ALLOWED_EMAILS`
 with a comma-separated list of who's allowed in — an empty allowlist
 means nobody can authenticate. Then:
 
@@ -376,7 +376,7 @@ RESOURCE_URL=https://mcp-gate.<your-tailnet-name>.ts.net/mcp
 ```
 
 and register that same host as your identity provider's OAuth callback
-(`${BASE_URL}/callback`). Then generate an auth key from the
+(`${BASE_URL}/oauth/callback`). Then generate an auth key from the
 [Tailscale admin console](https://login.tailscale.com/admin/settings/keys),
 set `TS_AUTHKEY` in `.env` too, bring the stack up, and run this **once**
 from the host (`--bg` persists it in `tailscaled`'s own state, so it
