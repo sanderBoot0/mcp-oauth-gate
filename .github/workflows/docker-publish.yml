@@ -11,7 +11,7 @@ jobs:
     build-check:
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
             - run: corepack enable
             - uses: actions/setup-node@v4
               with:
@@ -28,7 +28,7 @@ jobs:
         needs: build-check
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
             - run: corepack enable
             - uses: actions/setup-node@v4
               with:
@@ -74,7 +74,7 @@ jobs:
         permissions:
             contents: read
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - name: Set up Docker Buildx
               uses: docker/setup-buildx-action@v3
