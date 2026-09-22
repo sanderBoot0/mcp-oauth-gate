@@ -347,10 +347,15 @@ code:
     UPSTREAM_URL=http://my-mcp-server:3000
     ```
 
-    The gateway forwards the client's original request path unchanged, so
-    it doesn't need to know in advance whether your server's MCP endpoint
-    lives at `/mcp`, `/`, or anywhere else — whatever path the client
-    requested is what your server sees.
+    The gateway forwards the client's original request path unchanged for
+    everything that isn't one of its own reserved paths, so it doesn't
+    need to know in advance whether your server's MCP endpoint lives at
+    `/mcp`, `/`, or anywhere else other than those — whatever path the
+    client requested is what your server sees. The gateway's own fixed
+    paths (`/register`, `/authorize`, `/token`, `/oauth/callback`,
+    `/device*`, `/healthz`, `/verify`, and the `/.well-known/oauth-*`
+    discovery endpoints) are handled by nginx itself and never reach your
+    server — don't mount your MCP endpoint at any of those.
 
 3. **Set `RESOURCE_URL` to the full external URL clients will actually
    connect to** — the exact address, path included, that you'll give
