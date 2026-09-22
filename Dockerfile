@@ -1,6 +1,6 @@
 FROM node:26-alpine AS build
 RUN apk add --no-cache python3 make g++
-RUN corepack enable
+RUN npm install -g corepack@0.36.0 && corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
@@ -10,7 +10,7 @@ RUN pnpm run build
 
 FROM node:26-alpine AS deps
 RUN apk add --no-cache python3 make g++
-RUN corepack enable
+RUN npm install -g corepack@0.36.0 && corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --prod
