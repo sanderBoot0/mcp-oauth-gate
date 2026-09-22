@@ -33,9 +33,11 @@ no project-specific documentation needed at runtime:
 
 Standard OAuth 2.1 authorization-code flow with PKCE (RFC 7636) and
 Dynamic Client Registration (RFC 7591) from there; a device-code fallback
-(RFC 8628, at `/device/code` and `/device/token`) exists for clients that
-don't speak OAuth discovery but is not itself advertised in the discovery
-metadata.
+at `/device/code` and `/device/token` exists for clients that don't speak
+OAuth discovery. It's inspired by RFC 8628's UX but is a custom wire
+protocol (different parameters, a bespoke polling endpoint), not a
+conformant implementation of that RFC — and it is not itself advertised
+in the discovery metadata.
 
 ## Key facts for automated setup
 

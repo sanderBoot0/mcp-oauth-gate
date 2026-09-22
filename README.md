@@ -109,10 +109,13 @@ token.
 
 There's also a device-code flow for clients that don't speak OAuth
 discovery — the same "go to this URL, enter this code" pattern as
-`gh auth login`. It isn't advertised in the discovery metadata (only
-`authorization_code` and `refresh_token` are), so a client has to already
-know about `/device/code` and `/device/token` rather than discovering it
-automatically. Its tokens also behave differently: they don't expire and
+`gh auth login`, and inspired by RFC 8628's UX, but it's a custom wire
+protocol, not a conformant implementation of that RFC (different endpoint
+shape and parameters — see the table below). It isn't advertised in the
+discovery metadata (only `authorization_code` and `refresh_token` are), so
+a client has to already know about `/device/code` and `/device/token`
+rather than discovering it automatically. Its tokens also behave
+differently: they don't expire and
 there's no refresh token — revoke one by hand if a device is compromised
 (against the running container, so it hits the actual database rather
 than an unrelated local file):
@@ -135,7 +138,15 @@ mandatory, no implicit grant), plus these finalized RFCs:
 | [RFC 7591](https://www.rfc-editor.org/rfc/rfc7591) | Dynamic Client Registration Protocol    | `POST /register`                                                                            |
 | [RFC 8414](https://www.rfc-editor.org/rfc/rfc8414) | OAuth 2.0 Authorization Server Metadata | `/.well-known/oauth-authorization-server`                                                   |
 | [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) | OAuth 2.0 Protected Resource Metadata   | `/.well-known/oauth-protected-resource`, the `WWW-Authenticate: resource_metadata=...` hint |
-| [RFC 8628](https://www.rfc-editor.org/rfc/rfc8628) | OAuth 2.0 Device Authorization Grant    | The `/device/code` + `/device/token` fallback flow                                          |
+
+There's also a `/device/code` + `/device/token` fallback flow for clients
+that don't speak OAuth discovery, in the same spirit as
+[RFC 8628](https://www.rfc-editor.org/rfc/rfc8628) (Device Authorization
+Grant) — but it's a custom, proprietary wire protocol, not a conformant
+implementation of that RFC: it uses different parameter names and a
+bespoke polling endpoint rather than the standard `/token` endpoint with
+`grant_type=urn:ietf:params:oauth:grant-type:device_code`. A real RFC
+8628 client library will not interoperate with it as-is.
 
 The metadata endpoints (RFC 8414, RFC 9728) are what let an MCP client —
 or an AI agent driving one — discover how to authenticate against a given
@@ -227,6 +238,12 @@ CLIENT_SECRET=
 ALLOWED_EMAILS=
 ```
 
+Fill in `CLIENT_ID`/`CLIENT_SECRET` with an OAuth app registered with
+your identity provider (redirect URI `${BASE_URL}/callback`, i.e.
+`http://localhost:8080/callback` for this example), and `ALLOWED_EMAILS`
+with a comma-separated list of who's allowed in — an empty allowlist
+means nobody can authenticate. Then:
+
 ```sh
 docker compose up -d
 ```
@@ -313,7 +330,8 @@ real HTTPS URL for this gateway — reachable from your tailnet, and
 optionally from the public internet via
 [Funnel](https://tailscale.com/kb/1223/funnel) — without opening a single
 port on your router. Add a `tailscale` service to the quickstart's
-`docker-compose.yml`:
+`docker-compose.yml`, and add `ts-state` to its existing `volumes:` block
+alongside `gate-data`:
 
 ```yaml
 services:
@@ -338,12 +356,29 @@ services:
         depends_on: [mcp-oauth-gate]
 
 volumes:
-    ts-state: # in addition to gate-data from the quickstart
+    gate-data:
+    ts-state:
 ```
 
-Generate an auth key from the
+The resulting hostname is deterministic —
+`https://<hostname>.<your-tailnet-name>.ts.net`, `mcp-gate` for
+`<hostname>` per the config above, and `<your-tailnet-name>` is whatever
+your tailnet is already called (visible in the
+[admin console](https://login.tailscale.com/admin/machines), or via
+`tailscale status` on any device already joined to it) — so you can know
+the final URL before ever starting this stack, rather than discovering it
+after the fact and having to restart everything. Set that in `.env`
+**before** bringing the stack up:
+
+```sh
+BASE_URL=https://mcp-gate.<your-tailnet-name>.ts.net
+RESOURCE_URL=https://mcp-gate.<your-tailnet-name>.ts.net/mcp
+```
+
+and register that same host as your identity provider's OAuth callback
+(`${BASE_URL}/callback`). Then generate an auth key from the
 [Tailscale admin console](https://login.tailscale.com/admin/settings/keys),
-set `TS_AUTHKEY` in `.env`, bring the stack up, then run this **once**
+set `TS_AUTHKEY` in `.env` too, bring the stack up, and run this **once**
 from the host (`--bg` persists it in `tailscaled`'s own state, so it
 survives container restarts without re-running):
 
@@ -353,11 +388,9 @@ docker compose exec tailscale tailscale serve --bg --https=443 http://mcp-oauth-
 ```
 
 That alone makes the gateway reachable at
-`https://mcp-gate.<your-tailnet>.ts.net` from any device on your
-tailnet — point `BASE_URL`/`RESOURCE_URL` at that address and register it
-as your identity provider's callback host. To also make it reachable from
-the public internet, enable Funnel for this node in the Tailscale admin
-console first, then:
+`https://mcp-gate.<your-tailnet-name>.ts.net` from any device on your
+tailnet. To also make it reachable from the public internet, enable
+Funnel for this node in the Tailscale admin console first, then:
 
 ```sh
 docker compose exec tailscale tailscale funnel --bg --https=443 http://mcp-oauth-gate:80
