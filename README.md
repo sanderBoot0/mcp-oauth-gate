@@ -317,13 +317,24 @@ code:
     It doesn't have to be a sibling container — any address the gateway's
     container can reach over plain HTTP works (the bundled nginx rejects
     an `https://` `UPSTREAM_URL` outright — see step 2), including a
-    service on the host or another machine entirely. To reach a service on
-    the Docker host from Linux, `host.docker.internal` isn't predefined
-    the way it is on Docker Desktop — add
-    `extra_hosts: ["host.docker.internal:host-gateway"]` to the
-    `mcp-oauth-gate` service, and make sure that host service is bound to
-    `0.0.0.0` (or the Docker bridge interface), not just `127.0.0.1`,
-    which containers can't reach.
+    service on the host or another machine entirely. Reaching a service
+    on the Docker host from Linux needs care: `host.docker.internal`
+    doesn't work here even with
+    `extra_hosts: ["host.docker.internal:host-gateway"]` — that only adds
+    an `/etc/hosts` entry, but this image's nginx resolves `UPSTREAM_URL`
+    through an explicit DNS resolver
+    (`docker/nginx.conf.template`, needed so it re-resolves a container's
+    IP if that container gets recreated), which doesn't consult
+    `/etc/hosts` at all and fails with "host not found in resolver."
+    Use the Docker network's actual gateway IP instead:
+
+    ```sh
+    docker network inspect <project>_internal --format '{{(index .IPAM.Config 0).Gateway}}'
+    ```
+
+    and set `UPSTREAM_URL` to that IP (e.g. `http://172.19.0.1:3000`) —
+    with the host service bound to `0.0.0.0` or the bridge interface, not
+    just `127.0.0.1`, which containers can't reach.
 
     **If your MCP server is on another machine, that hop has to stay on a
     trusted private network (a VPN, [Tailscale](#making-it-publicly-reachable-with-tailscale-optional),
