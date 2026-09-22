@@ -1,13 +1,27 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { z } from 'zod';
 import { CLIENT_ID, CLIENT_SECRET, OIDC_ISSUER_URL } from '../env.js';
 import type { Provider } from '../provider.js';
 
-interface DiscoveryDocument {
-    issuer: string;
-    authorization_endpoint: string;
-    token_endpoint: string;
-    jwks_uri: string;
-}
+const DiscoveryDocumentSchema = z.object({
+    issuer: z.string(),
+    authorization_endpoint: z.string(),
+    token_endpoint: z.string(),
+    jwks_uri: z.string()
+});
+type DiscoveryDocument = z.infer<typeof DiscoveryDocumentSchema>;
+
+const OidcTokenResponseSchema = z.object({
+    id_token: z.string().optional()
+});
+
+// The id_token's signature is verified by jose against the provider's JWKS
+// (a cryptographic guarantee), so only the claims this code actually reads
+// need validating here — anything else in the payload is irrelevant.
+const IdTokenClaimsSchema = z.object({
+    email: z.string(),
+    email_verified: z.boolean().optional()
+});
 
 let discovery: DiscoveryDocument | undefined;
 let jwks: ReturnType<typeof createRemoteJWKSet> | undefined;
@@ -18,7 +32,7 @@ export async function initOidcProvider(): Promise<void> {
     if (!res.ok) {
         throw new Error(`OIDC discovery failed for ${OIDC_ISSUER_URL}: ${res.status} ${await res.text()}`);
     }
-    discovery = (await res.json()) as DiscoveryDocument;
+    discovery = DiscoveryDocumentSchema.parse(await res.json());
     jwks = createRemoteJWKSet(new URL(discovery.jwks_uri));
 }
 
@@ -63,7 +77,7 @@ export const oidcProvider: Provider = {
         if (!res.ok) {
             throw new Error(`OIDC token exchange failed: ${res.status} ${await res.text()}`);
         }
-        const body = (await res.json()) as { id_token?: string };
+        const body = OidcTokenResponseSchema.parse(await res.json());
         if (!body.id_token) {
             throw new Error('OIDC token response had no id_token');
         }
@@ -71,12 +85,14 @@ export const oidcProvider: Provider = {
             issuer,
             audience: CLIENT_ID
         });
-        if (typeof payload.email !== 'string') {
+        const parsedClaims = IdTokenClaimsSchema.safeParse(payload);
+        if (!parsedClaims.success) {
             throw new Error('OIDC id_token had no email claim');
         }
+        const claims = parsedClaims.data;
         return {
-            email: payload.email.toLowerCase(),
-            emailVerified: payload.email_verified === true
+            email: claims.email.toLowerCase(),
+            emailVerified: claims.email_verified === true
         };
     }
 };
