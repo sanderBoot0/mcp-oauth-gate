@@ -293,6 +293,121 @@ consolidate several services, see
 [`docs/reverse-proxy.md`](./docs/reverse-proxy.md) — it's a plain reverse
 proxy to this container, nothing gateway-specific to configure there.
 
+## Putting this in front of your own MCP server
+
+The Quickstart above uses `httpbin` as a stand-in for your real service.
+Swapping it out is three changes, none of them in your MCP server's own
+code:
+
+1. **Run your MCP server reachable from the gateway.** Simplest as
+   another service on the same `docker-compose` network — it doesn't need
+   a `ports:` mapping of its own, only `mcp-oauth-gate` needs to reach it:
+
+    ```yaml
+    services:
+        mcp-oauth-gate:
+            # ... unchanged from the quickstart above ...
+
+        my-mcp-server:
+            image: your-org/your-mcp-server:latest
+            restart: unless-stopped
+            networks: [internal]
+    ```
+
+    It doesn't have to be a sibling container — any address the gateway's
+    container can reach over plain HTTP works (the bundled nginx rejects
+    an `https://` `UPSTREAM_URL` outright — see step 2), including a
+    service on the host or another machine entirely. Reaching a service
+    on the Docker host from Linux needs care: `host.docker.internal`
+    doesn't work here even with
+    `extra_hosts: ["host.docker.internal:host-gateway"]` — that only adds
+    an `/etc/hosts` entry, but this image's nginx resolves `UPSTREAM_URL`
+    through an explicit DNS resolver
+    (`docker/nginx.conf.template`, needed so it re-resolves a container's
+    IP if that container gets recreated), which doesn't consult
+    `/etc/hosts` at all and fails with "host not found in resolver."
+    Use the Docker network's actual gateway IP instead:
+
+    ```sh
+    docker network inspect <project>_internal --format '{{(index .IPAM.Config 0).Gateway}}'
+    ```
+
+    and set `UPSTREAM_URL` to that IP (e.g. `http://172.19.0.1:3000`) —
+    with the host service bound to `0.0.0.0` or the bridge interface, not
+    just `127.0.0.1`, which containers can't reach.
+
+    **If your MCP server is on another machine, that hop has to stay on a
+    trusted private network (a VPN, [Tailscale](#making-it-publicly-reachable-with-tailscale-optional),
+    or an isolated LAN) — never plain HTTP across the open internet or an
+    untrusted network.** The gateway passes the client's bearer token and
+    the request/response bodies through to `UPSTREAM_URL` as-is — it
+    doesn't strip or re-encrypt them — so over plain HTTP both are
+    plaintext on that network hop, readable to anyone on the path. This
+    isn't specific to a remote machine — the same is true reaching any
+    upstream over plain HTTP — it's just a real risk once that hop leaves
+    your own host or LAN. (Some request headers _are_ rewritten in
+    transit — `Connection` is cleared and an `X-Device-Name` header is
+    injected, see below — but the token and payload aren't among them.)
+
+2. **Point `UPSTREAM_URL` at it** — scheme, host, and port only, and
+   `http://` specifically: the gateway doesn't support an HTTPS upstream
+   yet (`docker/docker-entrypoint.sh` rejects `https://` outright, since
+   SNI and certificate verification aren't configured for it):
+
+    ```sh
+    UPSTREAM_URL=http://my-mcp-server:3000
+    ```
+
+    The gateway forwards the client's original request path unchanged for
+    everything that isn't one of its own reserved paths, so it doesn't
+    need to know in advance whether your server's MCP endpoint lives at
+    `/mcp`, `/`, or anywhere else other than those — whatever path the
+    client requested is what your server sees. The gateway's own fixed
+    paths (`/register`, `/authorize`, `/token`, `/oauth/callback`,
+    `/device*`, `/healthz`, `/verify`, and the `/.well-known/oauth-*`
+    discovery endpoints) are handled by nginx itself and never reach your
+    server — don't mount your MCP endpoint at any of those.
+
+3. **Set `RESOURCE_URL` to the full external URL clients will actually
+   connect to** — the exact address, path included, that you'll give
+   your MCP client. This is returned as the `resource` field from
+   `/.well-known/oauth-protected-resource` (the metadata endpoint an
+   unauthenticated request's `WWW-Authenticate` header points a client
+   at, via `resource_metadata="${BASE_URL}/.well-known/oauth-protected-resource"`
+   — the header itself carries that metadata URL, not `RESOURCE_URL`
+   directly), so it has to match:
+
+    ```sh
+    RESOURCE_URL=https://gateway.example.com/mcp
+    ```
+
+    If your server answers at the root path instead, use
+    `https://gateway.example.com` — `RESOURCE_URL` just needs to match
+    wherever your server's real endpoint is, it isn't required to end in
+    `/mcp`.
+
+Point your MCP client at `RESOURCE_URL` and you're done — **the gateway
+is the entire protection boundary, provided it's the only way to reach
+your server.** Every request that reaches your server through the
+gateway has already been checked against a valid token, and your server
+doesn't need to do anything else to enforce that — but your server
+itself has no auth of its own, so if it's _also_ reachable directly
+(a host service bound to `0.0.0.0` and exposed beyond the Docker
+network, a remote machine with its port open to more than the gateway),
+a client can skip the gateway entirely. Firewall or network-ACL the
+upstream so only the gateway can reach it — the same requirement that
+already applies to keeping that hop on a trusted network (above).
+
+The gateway also injects an `X-Device-Name` header naming which device
+made the request (the name given during the device-code flow, or
+`oauth:<client name>` for a client that registered via standard OAuth),
+if your server wants it for logging or per-device behavior. Treat it as
+**untrusted, informational metadata, not part of the protection
+boundary** — the device-code name comes from client-supplied input at
+token-issuance time, so it's not sanitized against your server's own
+assumptions (don't use it for access-control decisions, and escape it
+before rendering it anywhere).
+
 ## Running it yourself
 
 Copy `.env.example` to `.env` and fill in:
