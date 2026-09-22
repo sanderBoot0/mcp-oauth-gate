@@ -15,6 +15,20 @@ case "$UPSTREAM_URL" in
         ;;
 esac
 
+# Must be scheme+host+port only. nginx's variable-based proxy_pass doesn't
+# ignore a path embedded here the way a literal proxy_pass does — it
+# replaces the client's actual request URI outright, silently breaking
+# "the original request path is forwarded unchanged" (confirmed by
+# testing: a proxy_pass variable set to ".../foo" turns *every* request,
+# regardless of what path the client asked for, into a request for /foo).
+authority="${UPSTREAM_URL#http://}"
+case "$authority" in
+    */* | *'?'* | *'#'*)
+        echo "UPSTREAM_URL must be scheme+host+port only, no path/query/fragment (got: $UPSTREAM_URL) — the gateway forwards the original request path unchanged, which a path here would silently override instead." >&2
+        exit 1
+        ;;
+esac
+
 export NODE_PORT="${PORT:-4000}"
 
 # Works across Docker, Compose, and Kubernetes alike, unlike hardcoding
@@ -50,14 +64,26 @@ NODE_PID=$!
 nginx -g 'daemon off;' &
 NGINX_PID=$!
 
+# This script is PID 1, so a `docker stop` sends TERM/INT here, not to the
+# background children — without forwarding it, Docker's default stop
+# timeout would just SIGKILL everything with no chance for node to finish
+# an in-flight request or nginx to close connections cleanly.
+shutdown() {
+    kill -TERM "$NODE_PID" "$NGINX_PID" 2>/dev/null || true
+    wait "$NODE_PID" 2>/dev/null || true
+    wait "$NGINX_PID" 2>/dev/null || true
+    exit 0
+}
+trap shutdown TERM INT
+
 # Portable equivalent of bash's `wait -n` (busybox ash doesn't have it):
-# poll until either process has exited, then bring the whole container
-# down. Docker's healthcheck alone doesn't restart anything on failure —
-# only a container *exit* does, via `restart: unless-stopped` or your
-# orchestrator's restart policy — so leaving the other process running
-# after one dies would just leave the container up and permanently
-# broken. Not a full process supervisor; a two-process container this
-# small doesn't need one beyond "notice a death, exit."
+# poll until either process has exited on its own, then bring the whole
+# container down. Docker's healthcheck alone doesn't restart anything on
+# failure — only a container *exit* does, via `restart: unless-stopped` or
+# your orchestrator's restart policy — so leaving the other process
+# running after one dies would just leave the container up and
+# permanently broken. Not a full process supervisor; a two-process
+# container this small doesn't need one beyond "notice a death, exit."
 while kill -0 "$NODE_PID" 2>/dev/null && kill -0 "$NGINX_PID" 2>/dev/null; do
     sleep 1
 done

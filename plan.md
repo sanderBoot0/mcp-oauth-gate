@@ -49,29 +49,33 @@ narrower job. Say so in the README; don't oversell it.
   speculatively.
 - **Non-OAuth identity** (passwords, magic links, WebAuthn). OAuth/OIDC only.
 
-## Architecture
+## Architecture (current, post-pivot)
 
-             ┌──────────────┐  auth_request /   ┌────────────────┐
-  MCP client ───►│ reverse proxy│  forward-auth      │ mcp-oauth-gate │
-                 │ (nginx/etc,  │───────────────────►│  (this thing)  │
-                 │  user brings │                     └───────┬────────┘
-                 │  their own)  │                             │
-                 └──────┬───────┘                     OIDC discovery /
-                        │ proxies through               GitHub REST
-                        ▼                                     │
-                 ┌──────────────┐                             ▼
-                 │  protected   │                    ┌────────────────┐
-                 │  service     │                    │ Google / Okta /│
-                 │  (any HTTP,  │                    │ Outlook / GitHub│
-                 │  not just    │                    │ / any OIDC IdP │
-                 │  MCP)        │                    └────────────────┘
-                 └──────────────┘
+                                   ┌─────────────────────────────┐
+  MCP client ─── HTTPS request ───►│        mcp-oauth-gate        │
+                                   │  (nginx + Node, one          │
+                                   │   container, bundled)        │
+                                   └───┬───────────────────┬─────┘
+                                       │                   │
+                              OIDC discovery /      proxies through,
+                              GitHub REST           once authenticated
+                                       │                   │
+                                       ▼                   ▼
+                              ┌────────────────┐  ┌──────────────────┐
+                              │ Google / Okta /│  │  protected        │
+                              │ Outlook / GitHub│  │  service          │
+                              │ / any OIDC IdP │  │  (UPSTREAM_URL,   │
+                              └────────────────┘  │  any HTTP, not    │
+                                                   │  just MCP)        │
+                                                   └──────────────────┘
 
-The gateway owns: OAuth 2.1 discovery endpoints, DCR, `/authorize`,
-`/token` (with PKCE + refresh rotation), the device-code fallback flow, and
-the `/verify` endpoint the proxy calls per-request. It does **not** proxy
-traffic to the protected service itself — that stays the reverse proxy's
-job, same division of labor as today's nginx + auth-service split.
+The gateway owns everything: OAuth 2.1 discovery endpoints, DCR,
+`/authorize`, `/token` (with PKCE + refresh rotation), the device-code
+fallback flow, the forward-auth check, *and* the proxying to
+`UPSTREAM_URL` — nginx does that internally, not a reverse proxy the user
+brings. See the architecture pivot note above and
+[`docs/reverse-proxy.md`](./docs/reverse-proxy.md) for what (if anything)
+still goes in front of this container.
 
 ## Provider model
 
@@ -149,10 +153,12 @@ itself ships. Optional/secondary: publish the provider + token logic as an
 npm package for anyone embedding it programmatically rather than running it
 as a sidecar.
 
-**Phase 6 (stretch, only if there's real demand)** — standalone reverse-proxy
-mode (no external nginx required), pluggable storage, additional
+**Phase 6 (stretch, only if there's real demand)** — ~~standalone
+reverse-proxy mode (no external nginx required)~~ **done, see the
+architecture pivot note above** — pluggable storage, additional
 convenience provider presets (e.g. a `microsoft` alias that's really just
-`oidc` with the right issuer pre-filled so people don't have to look it up).
+`oidc` with the right issuer pre-filled so people don't have to look it up)
+remain stretch goals.
 
 ## Open decisions (resolve before or during Phase 0)
 
