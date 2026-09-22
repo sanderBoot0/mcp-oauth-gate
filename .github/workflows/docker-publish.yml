@@ -115,7 +115,13 @@ jobs:
             # dockerhub-description is a Docker container action — only
             # $GITHUB_WORKSPACE is mounted into it, not the runner's /tmp —
             # so the generated file has to live under the workspace.
+            #
+            # Only on an actual push to master, not a version tag — a tag
+            # can be cut from an older commit, and syncing there would
+            # overwrite the overview with whatever README that commit had
+            # instead of the current one.
             - name: Rewrite relative links for Docker Hub
+              if: github.ref == 'refs/heads/master'
               run: |
                   sed -E \
                       -e 's#\]\(\./examples/docker-compose\)#](https://github.com/sanderBoot0/mcp-oauth-gate/tree/master/examples/docker-compose)#g' \
@@ -123,6 +129,7 @@ jobs:
                       README.md > dockerhub-readme.md
 
             - name: Sync Docker Hub repo overview
+              if: github.ref == 'refs/heads/master'
               uses: peter-evans/dockerhub-description@v4
               with:
                   username: ${{ vars.DOCKERHUB_USERNAME }}
