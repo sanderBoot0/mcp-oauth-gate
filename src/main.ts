@@ -9,8 +9,11 @@ async function main(): Promise<void> {
     }
     const provider = AUTH_PROVIDER === 'github' ? githubProvider : oidcProvider;
     const app = createApp(provider);
-    app.listen(PORT, '0.0.0.0', () => {
-        console.error(`[server] mcp-oauth-gate listening on :${PORT}, provider=${AUTH_PROVIDER}`);
+    // Loopback only — nginx (bundled in the same container) is the only
+    // thing that talks to this directly; nothing outside the container
+    // should ever reach this port.
+    app.listen(PORT, '127.0.0.1', () => {
+        console.error(`[server] mcp-oauth-gate listening on 127.0.0.1:${PORT}, provider=${AUTH_PROVIDER}`);
     });
 }
 

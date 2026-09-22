@@ -4,12 +4,12 @@
 service — MCP server or not — without changing a line of that service's
 code.**
 
-`mcp-oauth-gate` is a small, self-hostable authorization server + sidecar
-that sits in front of your existing service and handles login, tokens, and
+`mcp-oauth-gate` is a small, self-hostable authorization server that sits
+directly in front of your existing service and handles login, tokens, and
 access control for you — so tools like Claude, VS Code, or any other MCP
 client can connect with a real "Sign in with Google" (or GitHub, Okta,
 Auth0, Keycloak, ...) flow instead of a static bearer token pasted into a
-config file.
+config file. One container to run; no separate reverse proxy to configure.
 
 ## The problem this solves
 
@@ -39,23 +39,22 @@ something you grow into by accident.
 
 ## How it fits together
 
-`mcp-oauth-gate` never sees your application traffic — it's a **sidecar**
-that your reverse proxy asks "is this request's token good?" before
-letting it through. Your existing service doesn't need to know auth
-exists.
+`mcp-oauth-gate` bundles nginx internally and reverse-proxies to your
+service itself — there's no second container, and no nginx.conf to write.
+Point `UPSTREAM_URL` at your service, and every request either gets
+checked against a valid token and forwarded, or redirected into the login
+flow.
 
 ```mermaid
 flowchart LR
     client["MCP client<br/>(Claude, VS Code, ...)"]
-    proxy["Reverse proxy<br/>(nginx / Traefik / Caddy)"]
-    gate["mcp-oauth-gate"]
+    gate["mcp-oauth-gate<br/>(nginx + auth, one container)"]
     idp[("Identity provider<br/>Google · Okta · Auth0 · GitHub · ...")]
-    svc["Your protected service<br/>(any HTTP API — MCP or otherwise)"]
+    svc["Your protected service<br/>(any HTTP API — MCP or otherwise)<br/>UPSTREAM_URL"]
 
-    client -- "1 HTTPS request" --> proxy
-    proxy -- "2 is this token valid?" --> gate
-    gate -- "3 login + verify email" --> idp
-    proxy -- "4 forward, once approved" --> svc
+    client -- "1 HTTPS request" --> gate
+    gate -- "2 login + verify email" --> idp
+    gate -- "3 forward, once approved" --> svc
 ```
 
 ## What actually happens when a client connects
@@ -68,33 +67,28 @@ works.
 ```mermaid
 sequenceDiagram
     participant C as MCP client
-    participant P as Reverse proxy
     participant G as mcp-oauth-gate
     participant I as Identity provider
 
-    Note over C,G: Requests below go through the reverse proxy<br/>(omitted here for clarity — see the architecture diagram above)
-
-    C->>G: POST /auth/register  (Dynamic Client Registration)
+    C->>G: POST /register  (Dynamic Client Registration)
     G-->>C: client_id
 
-    C->>G: GET /auth/authorize?...&code_challenge=...  (PKCE)
+    C->>G: GET /authorize?...&code_challenge=...  (PKCE)
     G-->>C: 302 redirect to I's login page
     C->>I: Follows redirect, signs in
     I-->>C: 302 redirect back to G's callback, with ?code&state
 
-    C->>G: GET /auth/oauth/callback?code&state
+    C->>G: GET /oauth/callback?code&state
     G->>I: Exchange code for identity (server-to-server)
     I-->>G: Verified identity + email
     Note over G: Is this email on ALLOWED_EMAILS?
     G-->>C: 302 redirect back to the MCP client, with an authorization code
 
-    C->>G: POST /auth/token  (code + PKCE verifier)
+    C->>G: POST /token  (code + PKCE verifier)
     G-->>C: access_token + refresh_token
 
-    C->>P: Request to the protected resource<br/>Authorization: Bearer access_token
-    P->>G: auth_request /verify
-    G-->>P: 200 OK
-    P->>C: Proxied response
+    C->>G: Request to the protected resource<br/>Authorization: Bearer access_token
+    Note over G: Valid? Forward to UPSTREAM_URL.<br/>Otherwise 401.
 ```
 
 This authorization-code flow's access token expires after 1 hour by
@@ -108,11 +102,11 @@ There's also a device-code flow for clients that don't speak OAuth
 discovery — the same "go to this URL, enter this code" pattern as
 `gh auth login`. It isn't advertised in the discovery metadata (only
 `authorization_code` and `refresh_token` are), so a client has to already
-know about `/auth/device/code` and `/auth/device/token` rather than
-discovering it automatically. Its tokens also behave differently: they
-don't expire and there's no refresh token — revoke one by hand if a device
-is compromised (against the running container, so it hits the actual
-database rather than an unrelated local file):
+know about `/device/code` and `/device/token` rather than discovering it
+automatically. Its tokens also behave differently: they don't expire and
+there's no refresh token — revoke one by hand if a device is compromised
+(against the running container, so it hits the actual database rather
+than an unrelated local file):
 
 ```sh
 docker exec <container-name> node dist/scripts/tokens.js list
@@ -139,9 +133,9 @@ is built for exactly that.
 ## Quickstart
 
 The fastest way to see it working end to end is the bundled
-[`examples/docker-compose`](./examples/docker-compose) stack: the gateway,
-an nginx forward-auth config already wired up, and a placeholder protected
-service (`httpbin`) standing in for your real one.
+[`examples/docker-compose`](./examples/docker-compose) stack: the gateway
+and a placeholder protected service (`httpbin`) standing in for your real
+one.
 
 ```sh
 cd examples/docker-compose
@@ -165,8 +159,8 @@ instead — the same device-code flow a CLI tool like `gh auth login` uses —
 request a code and open the URL it gives you:
 
 ```console
-$ curl -s -X POST http://localhost:8080/auth/device/code
-{"device_code":"...","user_code":"F6DP-Y74K","verification_uri_complete":"http://localhost:8080/auth/device?user_code=F6DP-Y74K", ...}
+$ curl -s -X POST http://localhost:8080/device/code
+{"device_code":"...","user_code":"F6DP-Y74K","verification_uri_complete":"http://localhost:8080/device?user_code=F6DP-Y74K", ...}
 ```
 
 Open `verification_uri_complete` in a browser and sign in through your
@@ -175,46 +169,45 @@ from that response — this returns `{"error":"authorization_pending"}`
 until you approve it in the browser, then an access token:
 
 ```console
-$ curl -s -X POST http://localhost:8080/auth/device/token -d '{"device_code":"..."}' -H 'Content-Type: application/json'
+$ curl -s -X POST http://localhost:8080/device/token -d '{"device_code":"..."}' -H 'Content-Type: application/json'
 {"access_token":"...","token_type":"Bearer","device_name":"unnamed-device"}
 ```
 
-That token is what makes the earlier `/mcp` request succeed:
+That token is what makes a request to the protected resource succeed —
+your real MCP server would answer at `/mcp`; the placeholder `httpbin` in
+this quickstart doesn't implement that route, so hit one it does have to
+see the 200 (the auth check applies identically either way, to any path):
 
 ```console
-$ curl -i http://localhost:8080/mcp -H 'Authorization: Bearer <access_token>'
+$ curl -i http://localhost:8080/get -H 'Authorization: Bearer <access_token>'
 HTTP/1.1 200 OK
 ```
 
-See [`docs/reverse-proxy.md`](./docs/reverse-proxy.md) for the same
-pattern with Traefik, Caddy, or Envoy in place of nginx.
+If you already have a reverse proxy in front for TLS termination or to
+consolidate several services, see
+[`docs/reverse-proxy.md`](./docs/reverse-proxy.md) — it's a plain reverse
+proxy to this container, nothing gateway-specific to configure there.
 
 ## Running it yourself
 
 Copy `.env.example` to `.env` and fill in:
 
-| Variable                      | Description                                                                              |
-| ----------------------------- | ---------------------------------------------------------------------------------------- |
-| `BASE_URL`                    | Public URL this gateway is reached at                                                    |
-| `RESOURCE_URL`                | Canonical URI of the protected resource being guarded                                    |
-| `AUTH_PROVIDER`               | `oidc` (any OIDC-compliant provider) or `github`                                         |
-| `OIDC_ISSUER_URL`             | Issuer base URL (only when `AUTH_PROVIDER=oidc`), e.g. `https://accounts.google.com`     |
-| `CLIENT_ID` / `CLIENT_SECRET` | OAuth app credentials from the identity provider                                         |
-| `ALLOWED_EMAILS`              | Comma-separated allowlist of verified emails — this _is_ your entire access-control list |
-| `DB_PATH`                     | SQLite path (default `/data/tokens.db`)                                                  |
-| `PORT`                        | Listen port (default `4000`)                                                             |
+| Variable                      | Description                                                                                                                                                        |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `BASE_URL`                    | Public URL this gateway is reached at                                                                                                                              |
+| `RESOURCE_URL`                | Canonical URI of the protected resource being guarded                                                                                                              |
+| `UPSTREAM_URL`                | Internal address of the service being protected — scheme+host+port only, e.g. `http://mcp-server:3000` (no path: the original request path is forwarded unchanged) |
+| `AUTH_PROVIDER`               | `oidc` (any OIDC-compliant provider) or `github`                                                                                                                   |
+| `OIDC_ISSUER_URL`             | Issuer base URL (only when `AUTH_PROVIDER=oidc`), e.g. `https://accounts.google.com`                                                                               |
+| `CLIENT_ID` / `CLIENT_SECRET` | OAuth app credentials from the identity provider                                                                                                                   |
+| `ALLOWED_EMAILS`              | Comma-separated allowlist of verified emails — this _is_ your entire access-control list                                                                           |
+| `DB_PATH`                     | SQLite path (default `/data/tokens.db`)                                                                                                                            |
 
 The redirect/callback URL registered with your identity provider must be
-exactly `${BASE_URL}/auth/oauth/callback` — that `/auth` prefix only
-exists once a reverse proxy strips it (see the quickstart above or
-[`docs/reverse-proxy.md`](./docs/reverse-proxy.md)); the gateway's own
-routes are unprefixed (`/oauth/callback`, not `/auth/oauth/callback`).
-**This container always needs a reverse proxy in front of it** — the
-command below runs the gateway itself, not a complete deployment; without
-that proxy, the callback URL above (and every other `/auth/*` URL) 404s.
+exactly `${BASE_URL}/oauth/callback`.
 
 ```sh
-docker run --env-file .env -p 4000:4000 -v gate-data:/data sanderboot/mcp-oauth-gate
+docker run --env-file .env -p 80:80 -v gate-data:/data sanderboot/mcp-oauth-gate
 ```
 
 Published images: [`sanderboot/mcp-oauth-gate`](https://hub.docker.com/r/sanderboot/mcp-oauth-gate)
@@ -230,8 +223,8 @@ Before deploying this for anything real, read
 single-tenant assumption plainly, explains why Dynamic Client Registration
 is intentionally unauthenticated (and why that's safe _only_ under the
 allowlist-gated model), and lists what this gateway explicitly does not
-defend against: multi-tenancy; rate limiting (that's the reverse proxy's
-job); and audit logging (token issuance/revocation isn't shipped
+defend against: multi-tenancy; WAF/DDoS protection beyond a basic default
+rate limit; and audit logging (token issuance/revocation isn't shipped
 anywhere — bring your own log aggregation if you need a record of it).
 
 ## Contributing

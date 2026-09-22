@@ -37,10 +37,9 @@ not an oversight:
   allowlist, not the registry, is the real gate.
 
 This means anyone can enumerate the `/register` endpoint and accumulate
-`oauth_clients` rows. That's a nuisance (unbounded row growth, no rate
-limit on registration by default beyond whatever the reverse proxy
-applies), not an authorization bypass. If this matters for your deployment,
-add rate limiting on `/register` at the reverse-proxy layer.
+`oauth_clients` rows. That's a nuisance (unbounded row growth, bounded only
+by the bundled nginx's default rate limit — see below), not an
+authorization bypass.
 
 ## What's out of scope
 
@@ -48,10 +47,12 @@ add rate limiting on `/register` at the reverse-proxy layer.
   [`plan.md`](../plan.md)'s non-goals).
 - **Pluggable storage.** SQLite only. A compromised or corrupted DB file is
   a full outage/reset of every issued token, not a partial one.
-- **Rate limiting, WAF, DDoS protection.** These are the reverse proxy's
-  job (see [`docs/reverse-proxy.md`](./reverse-proxy.md) for example
-  `limit_req`/rate-limit config). The gateway itself does not throttle
-  requests.
+- **WAF, DDoS protection, and anything beyond a basic per-IP rate limit.**
+  The bundled nginx applies a default `limit_req` (5r/s on the protected
+  resource, 10r/s on the OAuth/login endpoints) as a nuisance-reduction
+  measure, not a defense against a determined attacker — that's still the
+  job of whatever's in front of this (a cloud load balancer, Cloudflare,
+  etc.), same as for any other service.
 - **Auditing/logging beyond stderr.** Token issuance/revocation events are
   not shipped anywhere; `console.error` output is all there is unless you
   wire up your own log aggregation.
@@ -82,8 +83,9 @@ add rate limiting on `/register` at the reverse-proxy layer.
 - **Tokens stored hashed** (SHA-256), never in plaintext, in SQLite.
 - **Short-lived OAuth access tokens** (1 hour) with 30-day refresh tokens,
   vs. non-expiring device-code tokens (no refresh mechanism exists for
-  those, so they're long-lived by design — revoke them manually via
-  `pnpm run tokens -- revoke <id>` if a device is compromised).
+  those, so they're long-lived by design — revoke them manually against the
+  running container (`docker exec <container> node dist/scripts/tokens.js
+revoke <id>`) if a device is compromised).
 
 ## Before you tag a release
 

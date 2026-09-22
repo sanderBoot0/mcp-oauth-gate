@@ -6,13 +6,13 @@ function required(name: string, fallback?: string): string {
     return value;
 }
 
+// Internal-only port the Node process listens on — nginx (bundled in the
+// same container) is the only thing that talks to it directly.
 export const PORT = Number(required('PORT', '4000'));
-// Public URL this gateway is reached at, e.g. https://auth.example.com
+// Public URL this gateway is reached at, e.g. https://auth.example.com —
+// this is nginx's address, not Node's; routes below are unprefixed since
+// nginx proxies straight through with no path rewriting.
 export const BASE_URL = required('BASE_URL').replace(/\/$/, '');
-// The reverse proxy is expected to strip this prefix before proxying here
-// (see the nginx/Traefik/Caddy examples in the README), but external URLs
-// (shown to the user, registered with the identity provider) need it.
-export const AUTH_PATH_PREFIX = '/auth';
 
 // The canonical URI of the protected resource this gateway is guarding
 // (RFC9728/RFC8707) — advertised in the protected-resource metadata and the

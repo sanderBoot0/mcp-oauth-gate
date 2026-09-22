@@ -16,10 +16,14 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
 FROM node:26-alpine
+RUN apk add --no-cache nginx gettext
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
+COPY docker/nginx.conf.template /etc/nginx/nginx.conf.template
+COPY docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENV NODE_ENV=production
-EXPOSE 4000
-CMD ["node", "dist/main.js"]
+EXPOSE 80
+ENTRYPOINT ["docker-entrypoint.sh"]
