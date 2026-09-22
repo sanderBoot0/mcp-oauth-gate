@@ -7,6 +7,15 @@ on:
     pull_request:
         branches: [master]
 
+# Serialize runs per ref so two rapid master pushes can't race: without
+# this, an older run finishing after a newer one could push its Docker Hub
+# README/description sync last and silently overwrite the newer content.
+# Not cancel-in-progress — a run already pushing images/creating a release
+# should finish rather than being killed mid-way.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: false
+
 jobs:
     build-check:
         runs-on: ubuntu-latest
