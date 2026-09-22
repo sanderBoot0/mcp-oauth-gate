@@ -1,0 +1,17 @@
+meta {
+  name: discovery - protected resource
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/.well-known/oauth-protected-resource
+  body: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.resource: isDefined
+  res.body.authorization_servers: isDefined
+  res.body.bearer_methods_supported[0]: eq header
+}

@@ -1,0 +1,23 @@
+meta {
+  name: token - bogus authorization code is rejected
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}{{authPrefix}}/token
+  body: formUrlEncoded
+}
+
+body:form-urlencoded {
+  grant_type: authorization_code
+  code: bogus-code-that-was-never-issued
+  redirect_uri: {{redirectUri}}
+  client_id: {{clientId}}
+  code_verifier: irrelevant-verifier-irrelevant-verifierxxxxx
+}
+
+assert {
+  res.status: eq 400
+  res.body.error: eq invalid_grant
+}

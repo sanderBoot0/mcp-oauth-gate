@@ -85,6 +85,21 @@ against a minimal mock IdP with real discovery/JWKS/signed tokens).
 Integration tests drive the full `register → authorize → token → verify →
 refresh → reuse-detected` chain over HTTP.
 
+### Smoke tests against a real deployment
+
+[`bruno/mcp-oauth-gate`](./bruno/mcp-oauth-gate) is a
+[Bruno](https://www.usebruno.com/) collection that exercises a **running**
+instance — the real Docker image behind real nginx forward-auth routing —
+rather than the in-process app the tests above use. See its own
+[README](./bruno/mcp-oauth-gate/README.md) for what it covers and why.
+
+```
+cd examples/docker-compose && cp .env.example .env && docker compose up -d
+cd ../.. && pnpm run test:smoke
+```
+
+CI runs this against every push and PR (see below), not just on release.
+
 ## Linting, formatting, type-checking
 
 ```
@@ -112,9 +127,10 @@ Revisit once that support lands.
 ## CI/CD
 
 `.github/workflows/docker-publish.yml` builds on every push/PR (format
-check, lint, typecheck, build, test), and on pushes to `master` or
-`v*.*.*` tags also builds and pushes a multi-arch image to Docker Hub. It
-needs:
+check, lint, typecheck, build, test), then builds the image and runs the
+Bruno smoke tests against the real docker-compose stack, and on pushes to
+`master` or `v*.*.*` tags also builds and pushes a multi-arch image to
+Docker Hub. It needs:
 
 - `DOCKERHUB_USERNAME` — a repo **variable** (not a secret — it's not
   sensitive) with your Docker Hub username

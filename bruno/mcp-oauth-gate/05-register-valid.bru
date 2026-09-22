@@ -1,0 +1,27 @@
+meta {
+  name: register - valid client (DCR)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}{{authPrefix}}/register
+  body: json
+}
+
+body:json {
+  {
+    "redirect_uris": ["{{redirectUri}}"],
+    "client_name": "Bruno smoke test client"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.client_id: isDefined
+  res.body.token_endpoint_auth_method: eq none
+}
+
+script:post-response {
+  bru.setVar("clientId", res.body.client_id);
+}

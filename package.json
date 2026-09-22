@@ -14,7 +14,8 @@
         "typecheck": "tsc -p tsconfig.eslint.json --noEmit",
         "lint": "eslint .",
         "format": "prettier --write .",
-        "format:check": "prettier --check ."
+        "format:check": "prettier --check .",
+        "test:smoke": "cd bruno/mcp-oauth-gate && bru run --env compose"
     },
     "dependencies": {
         "better-sqlite3": "11.10.0",
@@ -27,6 +28,7 @@
         "@types/express": "4.17.25",
         "@types/node": "22.20.4",
         "@types/supertest": "6.0.3",
+        "@usebruno/cli": "4.1.0",
         "eslint": "10.11.0",
         "eslint-config-prettier": "10.1.8",
         "prettier": "3.9.8",

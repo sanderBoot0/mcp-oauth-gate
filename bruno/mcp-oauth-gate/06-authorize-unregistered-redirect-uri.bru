@@ -1,0 +1,14 @@
+meta {
+  name: authorize - unregistered redirect_uri is rejected
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}{{authPrefix}}/authorize?client_id={{clientId}}&redirect_uri=https://attacker.test/cb&response_type=code&code_challenge=x&code_challenge_method=S256
+  body: none
+}
+
+assert {
+  res.status: eq 400
+}

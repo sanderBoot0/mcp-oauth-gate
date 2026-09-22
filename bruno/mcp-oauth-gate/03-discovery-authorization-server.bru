@@ -1,0 +1,19 @@
+meta {
+  name: discovery - authorization server
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/.well-known/oauth-authorization-server
+  body: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.issuer: isDefined
+  res.body.authorization_endpoint: contains {{authPrefix}}/authorize
+  res.body.token_endpoint: contains {{authPrefix}}/token
+  res.body.registration_endpoint: contains {{authPrefix}}/register
+  res.body.code_challenge_methods_supported[0]: eq S256
+}

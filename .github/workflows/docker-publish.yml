@@ -24,8 +24,51 @@ jobs:
             - run: pnpm run build
             - run: pnpm test
 
-    docker:
+    smoke-test:
         needs: build-check
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - run: corepack enable
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+
+            - name: Build image
+              run: docker build -t sanderboot/mcp-oauth-gate:latest .
+
+            - name: Start the docker-compose quickstart stack
+              working-directory: examples/docker-compose
+              run: |
+                  cat > .env <<'EOF'
+                  BASE_URL=http://localhost:8080
+                  RESOURCE_URL=http://localhost:8080/mcp
+                  AUTH_PROVIDER=oidc
+                  OIDC_ISSUER_URL=https://accounts.google.com
+                  CLIENT_ID=ci-test-client
+                  CLIENT_SECRET=ci-test-secret
+                  ALLOWED_EMAILS=test@example.com
+                  EOF
+                  docker compose up -d
+                  timeout 30 sh -c 'until curl -sf http://localhost:8080/healthz >/dev/null; do sleep 1; done'
+
+            - name: Run Bruno smoke tests
+              run: pnpm run test:smoke
+
+            - name: Dump container logs on failure
+              if: failure()
+              working-directory: examples/docker-compose
+              run: docker compose logs
+
+            - name: Tear down
+              if: always()
+              working-directory: examples/docker-compose
+              run: docker compose down -v
+
+    docker:
+        needs: [build-check, smoke-test]
         if: github.event_name == 'push'
         runs-on: ubuntu-latest
         permissions:

@@ -1,0 +1,20 @@
+meta {
+  name: authorize - valid request redirects to the identity provider
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}{{authPrefix}}/authorize?client_id={{clientId}}&redirect_uri={{redirectUri}}&response_type=code&code_challenge=nDQ_Rcehn1UD5kNGs-pIhEiVcRM7xBL00K_eAtkRnF0&code_challenge_method=S256&state=bruno-smoke-test
+  body: none
+}
+
+settings {
+  followRedirects: false
+}
+
+assert {
+  res.status: eq 302
+  res.headers['location']: isDefined
+  res.headers['set-cookie'][0]: contains mog_csrf
+}

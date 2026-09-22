@@ -1,0 +1,19 @@
+meta {
+  name: register - missing redirect_uris is rejected
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}{{authPrefix}}/register
+  body: json
+}
+
+body:json {
+  {}
+}
+
+assert {
+  res.status: eq 400
+  res.body.error: eq invalid_client_metadata
+}
