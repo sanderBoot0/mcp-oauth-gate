@@ -45,6 +45,7 @@ jobs:
                   cat > .env <<'EOF'
                   BASE_URL=http://localhost:8080
                   RESOURCE_URL=http://localhost:8080/mcp
+                  UPSTREAM_URL=http://protected-service:80
                   AUTH_PROVIDER=oidc
                   OIDC_ISSUER_URL=https://accounts.google.com
                   CLIENT_ID=ci-test-client

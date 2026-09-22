@@ -1,9 +1,10 @@
-# Quickstart: nginx forward-auth in front of a placeholder protected
+# Quickstart: the gateway (with nginx bundled inside — no separate proxy
+# container, no nginx.conf to write) in front of a placeholder protected
 # service. Swap `protected-service` for your real MCP server (or any HTTP
-# service) — the only requirement is that it's reachable from nginx on the
-# `internal` network.
+# service) — the only requirement is that it's reachable from the gateway
+# on the `internal` network, and that UPSTREAM_URL below points at it.
 #
-#   cp .env.example .env   # fill in BASE_URL, RESOURCE_URL, AUTH_PROVIDER, etc.
+#   cp .env.example .env   # fill in BASE_URL, RESOURCE_URL, UPSTREAM_URL, AUTH_PROVIDER, etc.
 #   docker compose up
 
 services:
@@ -13,39 +14,31 @@ services:
         environment:
             BASE_URL: ${BASE_URL}
             RESOURCE_URL: ${RESOURCE_URL}
+            UPSTREAM_URL: ${UPSTREAM_URL}
             AUTH_PROVIDER: ${AUTH_PROVIDER}
             OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+            TRUSTED_PROXY_CIDR: ${TRUSTED_PROXY_CIDR:-}
             CLIENT_ID: ${CLIENT_ID}
             CLIENT_SECRET: ${CLIENT_SECRET}
             ALLOWED_EMAILS: ${ALLOWED_EMAILS}
             DB_PATH: /data/tokens.db
         volumes:
             - gate-data:/data
+        ports:
+            - '8080:80'
         networks: [internal]
         healthcheck:
-            test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:4000/healthz']
+            test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1/healthz']
             interval: 30s
             timeout: 5s
             retries: 3
 
     # Replace this with your real protected service. It just needs to be
-    # reachable on the `internal` network at the hostname nginx.conf proxies
-    # to (`protected-service`, below).
+    # reachable on the `internal` network at the hostname UPSTREAM_URL
+    # points to (`protected-service`, below).
     protected-service:
         image: kennethreitz/httpbin
         restart: unless-stopped
-        networks: [internal]
-
-    nginx:
-        image: nginx:1.27-alpine
-        restart: unless-stopped
-        depends_on:
-            mcp-oauth-gate:
-                condition: service_healthy
-        ports:
-            - '8080:80'
-        volumes:
-            - ./nginx.conf:/etc/nginx/nginx.conf:ro
         networks: [internal]
 
 networks:

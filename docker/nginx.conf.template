@@ -1,0 +1,112 @@
+worker_processes auto;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    sendfile      on;
+
+    # Populated by docker-entrypoint.sh only if TRUSTED_PROXY_CIDR is set —
+    # tells nginx to trust X-Forwarded-For from a reverse proxy in front of
+    # this container, so $binary_remote_addr below (and everything else
+    # that reads the client address) reflects the real client rather than
+    # that proxy's own address. Empty directory otherwise.
+    include /etc/nginx/conf.d/*.conf;
+
+    # Keyed by the client address nginx sees directly — that's the real
+    # client unless something is proxying to this container without
+    # TRUSTED_PROXY_CIDR configured (see above), in which case every
+    # client behind that proxy shares one bucket.
+    limit_req_zone $binary_remote_addr zone=resource_zone:10m rate=5r/s;
+    limit_req_zone $binary_remote_addr zone=auth_zone:10m rate=10r/s;
+
+    server {
+        listen 80;
+        server_name _;
+        client_max_body_size 2m;
+
+        # UPSTREAM_URL's host may be a container/service name whose IP
+        # changes when it's recreated — resolving it once at nginx startup
+        # (the default if it were hardcoded into proxy_pass) would leave
+        # this pointing at a dead IP after that happens. Putting it in a
+        # variable forces re-resolution through this resolver on every
+        # request instead, bounded by the `valid` TTL below.
+        resolver ${RESOLVER} valid=10s;
+        resolver_timeout 5s;
+        set $upstream_url "${UPSTREAM_URL}";
+
+        # This gateway's own OAuth machinery — a small fixed set of
+        # reserved paths. Everything else (below) is the protected
+        # resource and gets proxied upstream.
+
+        location = /verify {
+            internal;
+            proxy_pass http://127.0.0.1:${NODE_PORT}/verify;
+            proxy_pass_request_body off;
+            proxy_set_header Content-Length "";
+            proxy_set_header Authorization $http_authorization;
+        }
+
+        # MCP OAuth 2.1 discovery (RFC9728 + RFC8414) — must be reachable
+        # without a token, since a client fetches these to find out how to
+        # get one in the first place.
+        location = /.well-known/oauth-protected-resource {
+            proxy_pass http://127.0.0.1:${NODE_PORT};
+            proxy_set_header Host $host;
+        }
+
+        location = /.well-known/oauth-authorization-server {
+            proxy_pass http://127.0.0.1:${NODE_PORT};
+            proxy_set_header Host $host;
+        }
+
+        # Dynamic Client Registration, the OAuth 2.1 authorize/token
+        # endpoints, and the browser-facing login/device-code flow — none
+        # of these have a token yet when they start, so none sit behind
+        # auth_request.
+        location ~ ^/(register|authorize|token|oauth/callback)$ {
+            limit_req zone=auth_zone burst=20 nodelay;
+            proxy_set_header Host $host;
+            proxy_pass http://127.0.0.1:${NODE_PORT};
+        }
+
+        location /device {
+            limit_req zone=auth_zone burst=20 nodelay;
+            proxy_set_header Host $host;
+            proxy_pass http://127.0.0.1:${NODE_PORT};
+        }
+
+        location = /healthz {
+            proxy_pass http://127.0.0.1:${NODE_PORT};
+        }
+
+        # The protected resource: anything not matched above. Not assumed
+        # to live at a fixed path (e.g. /mcp) — an MCP server's real
+        # endpoints can live wherever it puts them.
+        location / {
+            auth_request /verify;
+            auth_request_set $device_name $upstream_http_x_device_name;
+            # nginx's auth_request module already forwards a WWW-Authenticate
+            # header from the /verify subrequest's 401 onto the client
+            # response automatically — setting it again here would duplicate it.
+
+            limit_req zone=resource_zone burst=10 nodelay;
+
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_set_header X-Device-Name $device_name;
+            # $upstream_url is always http:// here — docker-entrypoint.sh
+            # rejects an https:// UPSTREAM_URL before this file is even
+            # generated, specifically because proxy_ssl_server_name/
+            # proxy_ssl_verify aren't configured below (no SNI, no upstream
+            # certificate verification), so an HTTPS upstream would connect
+            # "successfully" while silently skipping both. If HTTPS upstream
+            # support is ever added, it needs both of those configured, not
+            # just allowing the scheme through.
+            proxy_pass $upstream_url;
+        }
+    }
+}

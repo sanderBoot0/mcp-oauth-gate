@@ -6,13 +6,27 @@
 
 A small, self-hostable **MCP OAuth 2.1 authorization server + auth gateway**,
 extracted and generalized from the `auth-service` built for a personal
-Obsidian-vault MCP server. It sits in front of any HTTP service reachable
-through a forward-auth-capable reverse proxy (nginx `auth_request`, Traefik
-`forwardAuth`, Caddy `forward_auth`, Envoy `ext_authz`) and turns it into a
-proper OAuth 2.1 resource server for MCP clients — device-code login,
+Obsidian-vault MCP server. It bundles its own reverse proxy (nginx) and
+sits directly in front of any HTTP service, turning it into a proper
+OAuth 2.1 resource server for MCP clients — device-code login,
 Dynamic Client Registration, PKCE, rotating refresh tokens — while gating
 who's allowed in with a flat email allowlist against a real identity
 provider (Google, Microsoft/Outlook, GitHub, or anything OIDC-compliant).
+One container to run, one env var (`UPSTREAM_URL`) to point it at the
+service being protected — no separate reverse proxy to configure.
+
+> **Architecture pivot (post-v0.1.0):** the original plan below assumed a
+> forward-auth *sidecar* — the user's own reverse proxy calls this
+> service's `/verify` endpoint and does its own routing/proxying. That
+> shipped and worked, but real usage showed the actual adoption blocker
+> was exactly what "Open decision #1" below flagged as the thing to watch
+> for: two containers plus hand-written nginx config was real, avoidable
+> friction. nginx is now bundled inside this project's own image instead;
+> see [`docs/reverse-proxy.md`](./docs/reverse-proxy.md) for what's left
+> for a user to configure (just TLS termination, optionally) and the
+> [README](./README.md) for the current architecture diagram. Phases 0-4
+> below are historical record of how v0.1.0 got built, not a description
+> of the current sidecar-free architecture.
 
 **The gap this fills**: most self-hosted MCP servers today ship with either
 no auth or a single static bearer token. Full multi-tenant OAuth (what
@@ -33,34 +47,35 @@ narrower job. Say so in the README; don't oversell it.
 - **Pluggable storage backends.** SQLite only. Revisit only if someone
   actually needs multi-replica deployment — don't build the abstraction
   speculatively.
-- **A bundled standalone reverse proxy** (i.e. replacing nginx entirely,
-  the way `oauth2-proxy` does). v0 is a sidecar that answers forward-auth
-  subrequests; see "Open decision #1" below before ruling this out for good.
 - **Non-OAuth identity** (passwords, magic links, WebAuthn). OAuth/OIDC only.
 
-## Architecture
+## Architecture (current, post-pivot)
 
-             ┌──────────────┐  auth_request /   ┌────────────────┐
-  MCP client ───►│ reverse proxy│  forward-auth      │ mcp-oauth-gate │
-                 │ (nginx/etc,  │───────────────────►│  (this thing)  │
-                 │  user brings │                     └───────┬────────┘
-                 │  their own)  │                             │
-                 └──────┬───────┘                     OIDC discovery /
-                        │ proxies through               GitHub REST
-                        ▼                                     │
-                 ┌──────────────┐                             ▼
-                 │  protected   │                    ┌────────────────┐
-                 │  service     │                    │ Google / Okta /│
-                 │  (any HTTP,  │                    │ Outlook / GitHub│
-                 │  not just    │                    │ / any OIDC IdP │
-                 │  MCP)        │                    └────────────────┘
-                 └──────────────┘
+                                   ┌─────────────────────────────┐
+  MCP client ─── HTTPS request ───►│        mcp-oauth-gate        │
+                                   │  (nginx + Node, one          │
+                                   │   container, bundled)        │
+                                   └───┬───────────────────┬─────┘
+                                       │                   │
+                              OIDC discovery /      proxies through,
+                              GitHub REST           once authenticated
+                                       │                   │
+                                       ▼                   ▼
+                              ┌────────────────┐  ┌──────────────────┐
+                              │ Google / Okta /│  │  protected        │
+                              │ Outlook / GitHub│  │  service          │
+                              │ / any OIDC IdP │  │  (UPSTREAM_URL,   │
+                              └────────────────┘  │  any HTTP, not    │
+                                                   │  just MCP)        │
+                                                   └──────────────────┘
 
-The gateway owns: OAuth 2.1 discovery endpoints, DCR, `/authorize`,
-`/token` (with PKCE + refresh rotation), the device-code fallback flow, and
-the `/verify` endpoint the proxy calls per-request. It does **not** proxy
-traffic to the protected service itself — that stays the reverse proxy's
-job, same division of labor as today's nginx + auth-service split.
+The gateway owns everything: OAuth 2.1 discovery endpoints, DCR,
+`/authorize`, `/token` (with PKCE + refresh rotation), the device-code
+fallback flow, the forward-auth check, *and* the proxying to
+`UPSTREAM_URL` — nginx does that internally, not a reverse proxy the user
+brings. See the architecture pivot note above and
+[`docs/reverse-proxy.md`](./docs/reverse-proxy.md) for what (if anything)
+still goes in front of this container.
 
 ## Provider model
 
@@ -138,18 +153,20 @@ itself ships. Optional/secondary: publish the provider + token logic as an
 npm package for anyone embedding it programmatically rather than running it
 as a sidecar.
 
-**Phase 6 (stretch, only if there's real demand)** — standalone reverse-proxy
-mode (no external nginx required), pluggable storage, additional
+**Phase 6 (stretch, only if there's real demand)** — ~~standalone
+reverse-proxy mode (no external nginx required)~~ **done, see the
+architecture pivot note above** — pluggable storage, additional
 convenience provider presets (e.g. a `microsoft` alias that's really just
-`oidc` with the right issuer pre-filled so people don't have to look it up).
+`oidc` with the right issuer pre-filled so people don't have to look it up)
+remain stretch goals.
 
 ## Open decisions (resolve before or during Phase 0)
 
-1. **Sidecar (forward-auth) vs. bundled proxy.** This plan recommends
-   staying a sidecar — less work, and forward-auth is broadly supported
-   (nginx/Traefik/Caddy/Envoy all speak some version of it), so it's
-   arguably *more* portable than owning the whole proxy. Revisit only if
-   "no nginx needed" turns out to be the actual adoption blocker.
+1. ~~**Sidecar (forward-auth) vs. bundled proxy.**~~ **Resolved, reversed:**
+   "no nginx needed" *was* the actual adoption blocker this was meant to
+   watch for — two containers plus hand-written nginx config was real
+   friction. nginx is now bundled into this project's own image; see the
+   architecture pivot note at the top of this document.
 2. **License.** Not decided — MIT is the path of least friction if the goal
    is adoption; note `oauth2-proxy` itself is Apache-2.0 if consistency with
    that ecosystem matters to you.

@@ -39,8 +39,8 @@ refresh → reuse-detected` chain over HTTP.
 
 [`bruno/mcp-oauth-gate`](./bruno/mcp-oauth-gate) is a
 [Bruno](https://www.usebruno.com/) collection that exercises a **running**
-instance — the real Docker image behind real nginx forward-auth routing —
-rather than the in-process app the tests above use. See its own
+instance — the real Docker image, bundled nginx and all — rather than the
+in-process app the tests above use. See its own
 [README](./bruno/mcp-oauth-gate/README.md) for what it covers and why.
 
 `docker-compose.yml` points at the published `sanderboot/mcp-oauth-gate:latest`

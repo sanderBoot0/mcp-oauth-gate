@@ -1,7 +1,7 @@
 import express from 'express';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
-import { BASE_URL, AUTH_PATH_PREFIX, RESOURCE_URL, ALLOWED_EMAILS } from './env.js';
+import { BASE_URL, RESOURCE_URL, ALLOWED_EMAILS } from './env.js';
 import type { Provider } from './provider.js';
 import { createDeviceRequest, findByUserCode, approve, pollAndConsume } from './deviceFlow.js';
 import { beginAuthorization, completeAuthorization, exchangeCode } from './oauth.js';
@@ -21,7 +21,7 @@ import { deviceCodeForm, confirmPage, successPage, errorPage } from './html.js';
 
 const RESOURCE_METADATA_URL = `${BASE_URL}/.well-known/oauth-protected-resource`;
 
-const REDIRECT_URI = `${BASE_URL}${AUTH_PATH_PREFIX}/oauth/callback`;
+const REDIRECT_URI = `${BASE_URL}/oauth/callback`;
 
 // OAuth-issued access tokens are short-lived per spec's "SHOULD issue
 // short-lived access tokens" — the client is expected to use the paired
@@ -148,9 +148,9 @@ export function createApp(provider: Provider): express.Express {
     app.get('/.well-known/oauth-authorization-server', (_req, res) => {
         res.json({
             issuer: BASE_URL,
-            authorization_endpoint: `${BASE_URL}${AUTH_PATH_PREFIX}/authorize`,
-            token_endpoint: `${BASE_URL}${AUTH_PATH_PREFIX}/token`,
-            registration_endpoint: `${BASE_URL}${AUTH_PATH_PREFIX}/register`,
+            authorization_endpoint: `${BASE_URL}/authorize`,
+            token_endpoint: `${BASE_URL}/token`,
+            registration_endpoint: `${BASE_URL}/register`,
             response_types_supported: ['code'],
             grant_types_supported: ['authorization_code', 'refresh_token'],
             code_challenge_methods_supported: ['S256'],
@@ -282,7 +282,7 @@ export function createApp(provider: Provider): express.Express {
     app.post('/device/code', (req, res) => {
         const { client_hint: clientHint } = DeviceCodeBodySchema.parse(req.body);
         const { deviceCode, userCode, expiresIn, interval } = createDeviceRequest(clientHint);
-        const verificationUri = `${BASE_URL}${AUTH_PATH_PREFIX}/device`;
+        const verificationUri = `${BASE_URL}/device`;
         res.json({
             device_code: deviceCode,
             user_code: userCode,

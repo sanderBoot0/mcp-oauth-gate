@@ -18,10 +18,10 @@ describe('githubProvider', () => {
     });
 
     it('buildAuthUrl points at GitHub with the right client_id, scope, and state', () => {
-        const url = new URL(githubProvider.buildAuthUrl('https://auth.test/auth/oauth/callback', 'oauth:abc:csrf'));
+        const url = new URL(githubProvider.buildAuthUrl('https://auth.test/oauth/callback', 'oauth:abc:csrf'));
         expect(url.origin + url.pathname).toBe('https://github.com/login/oauth/authorize');
         expect(url.searchParams.get('client_id')).toBe('test-client-id');
-        expect(url.searchParams.get('redirect_uri')).toBe('https://auth.test/auth/oauth/callback');
+        expect(url.searchParams.get('redirect_uri')).toBe('https://auth.test/oauth/callback');
         expect(url.searchParams.get('scope')).toBe('read:user user:email');
         expect(url.searchParams.get('state')).toBe('oauth:abc:csrf');
         expect(url.searchParams.get('allow_signup')).toBe('false');
@@ -40,7 +40,7 @@ describe('githubProvider', () => {
             )
         );
 
-        const identity = await githubProvider.exchangeCodeForIdentity('some-code', 'https://auth.test/auth/oauth/callback');
+        const identity = await githubProvider.exchangeCodeForIdentity('some-code', 'https://auth.test/oauth/callback');
         expect(identity).toEqual({ email: 'primary@example.com', emailVerified: true });
     });
 
@@ -51,7 +51,7 @@ describe('githubProvider', () => {
             new Response(JSON.stringify([{ email: 'unverified@example.com', primary: true, verified: false }]), { status: 200 })
         );
 
-        await expect(githubProvider.exchangeCodeForIdentity('some-code', 'https://auth.test/auth/oauth/callback')).rejects.toThrow(
+        await expect(githubProvider.exchangeCodeForIdentity('some-code', 'https://auth.test/oauth/callback')).rejects.toThrow(
             /no verified primary email/
         );
     });
@@ -60,7 +60,7 @@ describe('githubProvider', () => {
         const fetchMock = vi.mocked(fetch);
         fetchMock.mockResolvedValueOnce(new Response('bad request', { status: 400 }));
 
-        await expect(githubProvider.exchangeCodeForIdentity('bad-code', 'https://auth.test/auth/oauth/callback')).rejects.toThrow(
+        await expect(githubProvider.exchangeCodeForIdentity('bad-code', 'https://auth.test/oauth/callback')).rejects.toThrow(
             /token exchange failed/
         );
     });

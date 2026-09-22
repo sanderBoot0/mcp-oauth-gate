@@ -1,11 +1,3 @@
-import { AUTH_PATH_PREFIX } from './env.js';
-
-// The reverse proxy strips AUTH_PATH_PREFIX before proxying to this
-// service, so this service's own Express routes are prefix-free — but any
-// link/form rendered into HTML is resolved by the BROWSER against the real
-// public path space, and must carry the prefix back.
-const p = (path: string) => `${AUTH_PATH_PREFIX}${path}`;
-
 const STYLE = `
   body { font-family: system-ui, sans-serif; max-width: 480px; margin: 4rem auto; padding: 0 1.5rem; color: #222; }
   .code { font-size: 1.8rem; font-weight: 600; letter-spacing: 0.1em; background: #f2f2f2; padding: 0.75rem 1rem; border-radius: 8px; text-align: center; margin: 1.5rem 0; }
@@ -24,7 +16,7 @@ export function deviceCodeForm(prefill: string, error?: string): string {
         `<h1>Approve a device</h1>
      ${error ? `<p style="color:#c00">${error}</p>` : ''}
      <p>Enter the code shown on your device to authorize it.</p>
-     <form action="${p('/device')}" method="get">
+     <form action="/device" method="get">
        <input type="text" name="user_code" value="${prefill}" maxlength="9" autofocus required>
        <p><button type="submit" class="button" style="border:none;cursor:pointer">Continue</button></p>
      </form>`
@@ -38,7 +30,7 @@ export function confirmPage(userCode: string, deviceHint: string): string {
      <div class="code">${userCode}</div>
      <p>Device: <strong>${deviceHint}</strong></p>
      <p>Signing in will grant this device access to the protected service.</p>
-     <p><a class="button" href="${p('/device/authorize')}?user_code=${encodeURIComponent(userCode)}">Continue</a></p>`
+     <p><a class="button" href="/device/authorize?user_code=${encodeURIComponent(userCode)}">Continue</a></p>`
     );
 }
 

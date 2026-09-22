@@ -20,7 +20,7 @@ afterAll(async () => {
 
 describe('oidcProvider (generic OIDC discovery)', () => {
     it('buildAuthUrl uses the discovered authorization_endpoint', () => {
-        const url = new URL(oidcProvider.buildAuthUrl('https://auth.test/auth/oauth/callback', 'oauth:abc:csrf'));
+        const url = new URL(oidcProvider.buildAuthUrl('https://auth.test/oauth/callback', 'oauth:abc:csrf'));
         expect(url.origin + url.pathname).toBe(`${idp.issuer}/authorize`);
         expect(url.searchParams.get('client_id')).toBe('test-client-id');
         expect(url.searchParams.get('scope')).toBe('openid email');
@@ -29,19 +29,19 @@ describe('oidcProvider (generic OIDC discovery)', () => {
 
     it('exchangeCodeForIdentity verifies the id_token against the discovered JWKS and extracts the email', async () => {
         idp.nextIdTokenClaims = { email: 'someone@example.com', email_verified: true };
-        const identity = await oidcProvider.exchangeCodeForIdentity('some-code', 'https://auth.test/auth/oauth/callback');
+        const identity = await oidcProvider.exchangeCodeForIdentity('some-code', 'https://auth.test/oauth/callback');
         expect(identity).toEqual({ email: 'someone@example.com', emailVerified: true });
     });
 
     it('lowercases the email and reflects email_verified: false through', async () => {
         idp.nextIdTokenClaims = { email: 'Mixed.Case@Example.com', email_verified: false };
-        const identity = await oidcProvider.exchangeCodeForIdentity('some-code', 'https://auth.test/auth/oauth/callback');
+        const identity = await oidcProvider.exchangeCodeForIdentity('some-code', 'https://auth.test/oauth/callback');
         expect(identity).toEqual({ email: 'mixed.case@example.com', emailVerified: false });
     });
 
     it('rejects an id_token with no email claim', async () => {
         idp.nextIdTokenClaims = { sub: 'user-123' };
-        await expect(oidcProvider.exchangeCodeForIdentity('some-code', 'https://auth.test/auth/oauth/callback')).rejects.toThrow(
+        await expect(oidcProvider.exchangeCodeForIdentity('some-code', 'https://auth.test/oauth/callback')).rejects.toThrow(
             /no email claim/
         );
     });
