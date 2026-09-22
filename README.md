@@ -371,9 +371,16 @@ code:
     `/mcp`.
 
 Point your MCP client at `RESOURCE_URL` and you're done — **the gateway
-is the entire protection boundary**: every request that reaches your
-server has already been checked against a valid token, and your server
-doesn't need to do anything else to enforce that.
+is the entire protection boundary, provided it's the only way to reach
+your server.** Every request that reaches your server through the
+gateway has already been checked against a valid token, and your server
+doesn't need to do anything else to enforce that — but your server
+itself has no auth of its own, so if it's _also_ reachable directly
+(a host service bound to `0.0.0.0` and exposed beyond the Docker
+network, a remote machine with its port open to more than the gateway),
+a client can skip the gateway entirely. Firewall or network-ACL the
+upstream so only the gateway can reach it — the same requirement that
+already applies to keeping that hop on a trusted network (above).
 
 The gateway also injects an `X-Device-Name` header naming which device
 made the request (the name given during the device-code flow, or
