@@ -114,7 +114,9 @@ jobs:
             # URLs before syncing rather than pushing the file verbatim.
             - name: Rewrite relative links for Docker Hub
               run: |
-                  sed -E 's#\]\(\./#](https://github.com/sanderBoot0/mcp-oauth-gate/blob/master/#g' \
+                  sed -E \
+                      -e 's#\]\(\./examples/docker-compose\)#](https://github.com/sanderBoot0/mcp-oauth-gate/tree/master/examples/docker-compose)#g' \
+                      -e 's#\]\(\./#](https://github.com/sanderBoot0/mcp-oauth-gate/blob/master/#g' \
                       README.md > /tmp/dockerhub-readme.md
 
             - name: Sync Docker Hub repo overview
@@ -123,5 +125,5 @@ jobs:
                   username: ${{ vars.DOCKERHUB_USERNAME }}
                   password: ${{ secrets.DOCKERHUB_TOKEN }}
                   repository: sanderboot/mcp-oauth-gate
-                  short-description: Self-hostable OAuth 2.1 authorization server, bundled with nginx, for putting real login in front of an MCP server or any HTTP service.
+                  short-description: 'Self-hostable OAuth 2.1 gateway: real login (OIDC/GitHub) in front of an MCP server or HTTP service.'
                   readme-filepath: /tmp/dockerhub-readme.md
