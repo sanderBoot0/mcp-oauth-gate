@@ -315,10 +315,20 @@ code:
    ```
 
    It doesn't have to be a sibling container — any address the gateway's
-   container can reach works, including a service on the host
-   (`http://host.docker.internal:3000`) or another machine entirely.
+   container can reach over plain HTTP works (the bundled nginx rejects
+   an `https://` `UPSTREAM_URL` outright — see step 2), including a
+   service on the host or another machine entirely. To reach a service on
+   the Docker host from Linux, `host.docker.internal` isn't predefined
+   the way it is on Docker Desktop — add
+   `extra_hosts: ["host.docker.internal:host-gateway"]` to the
+   `mcp-oauth-gate` service, and make sure that host service is bound to
+   `0.0.0.0` (or the Docker bridge interface), not just `127.0.0.1`,
+   which containers can't reach.
 
-2. **Point `UPSTREAM_URL` at it** — scheme, host, and port only:
+2. **Point `UPSTREAM_URL` at it** — scheme, host, and port only, and
+   `http://` specifically: the gateway doesn't support an HTTPS upstream
+   yet (`docker/docker-entrypoint.sh` rejects `https://` outright, since
+   SNI and certificate verification aren't configured for it):
 
    ```sh
    UPSTREAM_URL=http://my-mcp-server:3000
@@ -331,8 +341,12 @@ code:
 
 3. **Set `RESOURCE_URL` to the full external URL clients will actually
    connect to** — the exact address, path included, that you'll give
-   your MCP client (this is what gets advertised in the OAuth discovery
-   metadata and the `WWW-Authenticate` header, so it has to match):
+   your MCP client. This is returned as the `resource` field from
+   `/.well-known/oauth-protected-resource` (the metadata endpoint an
+   unauthenticated request's `WWW-Authenticate` header points a client
+   at, via `resource_metadata="${BASE_URL}/.well-known/oauth-protected-resource"`
+   — the header itself carries that metadata URL, not `RESOURCE_URL`
+   directly), so it has to match:
 
    ```sh
    RESOURCE_URL=https://gateway.example.com/mcp
