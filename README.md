@@ -293,6 +293,65 @@ consolidate several services, see
 [`docs/reverse-proxy.md`](./docs/reverse-proxy.md) — it's a plain reverse
 proxy to this container, nothing gateway-specific to configure there.
 
+## Putting this in front of your own MCP server
+
+The Quickstart above uses `httpbin` as a stand-in for your real service.
+Swapping it out is three changes, none of them in your MCP server's own
+code:
+
+1. **Run your MCP server reachable from the gateway.** Simplest as
+   another service on the same `docker-compose` network — it doesn't need
+   a `ports:` mapping of its own, only `mcp-oauth-gate` needs to reach it:
+
+   ```yaml
+   services:
+       mcp-oauth-gate:
+           # ... unchanged from the quickstart above ...
+
+       my-mcp-server:
+           image: your-org/your-mcp-server:latest
+           restart: unless-stopped
+           networks: [internal]
+   ```
+
+   It doesn't have to be a sibling container — any address the gateway's
+   container can reach works, including a service on the host
+   (`http://host.docker.internal:3000`) or another machine entirely.
+
+2. **Point `UPSTREAM_URL` at it** — scheme, host, and port only:
+
+   ```sh
+   UPSTREAM_URL=http://my-mcp-server:3000
+   ```
+
+   The gateway forwards the client's original request path unchanged, so
+   it doesn't need to know in advance whether your server's MCP endpoint
+   lives at `/mcp`, `/`, or anywhere else — whatever path the client
+   requested is what your server sees.
+
+3. **Set `RESOURCE_URL` to the full external URL clients will actually
+   connect to** — the exact address, path included, that you'll give
+   your MCP client (this is what gets advertised in the OAuth discovery
+   metadata and the `WWW-Authenticate` header, so it has to match):
+
+   ```sh
+   RESOURCE_URL=https://gateway.example.com/mcp
+   ```
+
+   If your server answers at the root path instead, use
+   `https://gateway.example.com` — `RESOURCE_URL` just needs to match
+   wherever your server's real endpoint is, it isn't required to end in
+   `/mcp`.
+
+Point your MCP client at `RESOURCE_URL` and you're done — every request
+that reaches your server has already passed authentication, and the
+gateway forwards an `X-Device-Name` header identifying which device made
+the request (the name given during the device-code flow, or
+`oauth:<client name>` for a client that registered via standard OAuth) if
+your server wants it for logging or per-device behavior. It's purely
+informational — your server doesn't need to check it, or anything else,
+for the request to already be authorized.
+
 ## Running it yourself
 
 Copy `.env.example` to `.env` and fill in:
