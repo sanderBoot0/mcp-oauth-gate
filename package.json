@@ -53,16 +53,16 @@
         "@types/better-sqlite3": "7.6.13",
         "@types/express": "5.0.6",
         "@types/node": "26.6.2",
-        "@types/supertest": "6.0.3",
-        "@usebruno/cli": "4.1.0",
+        "@types/supertest": "7.2.1",
+        "@usebruno/cli": "4.2.0",
         "eslint": "10.11.0",
         "eslint-config-prettier": "10.1.8",
-        "prettier": "3.9.8",
-        "supertest": "7.2.2",
+        "prettier": "3.9.9",
+        "supertest": "7.3.0",
         "tsx": "4.23.15",
         "typescript": "6.0.3",
         "typescript-eslint": "8.70.1",
-        "vitest": "5.0.1"
+        "vitest": "5.0.2"
     },
     "packageManager": "pnpm@12.5.1+sha512.e3f305bc784a2bc89f5ad3b6138889470fae8d2af5f36b61216ec91c2c3d64089775f9de38aac331044ea40f245cb0d5666392dfdf65824e1907ef6a2c62de5f"
 }
