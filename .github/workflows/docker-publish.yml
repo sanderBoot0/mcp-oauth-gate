@@ -139,7 +139,7 @@ jobs:
 
             - name: Sync Docker Hub repo overview
               if: github.ref == 'refs/heads/master'
-              uses: peter-evans/dockerhub-description@v4
+              uses: peter-evans/dockerhub-description@v5
               with:
                   username: ${{ vars.DOCKERHUB_USERNAME }}
                   password: ${{ secrets.DOCKERHUB_TOKEN }}
