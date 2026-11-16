@@ -43,7 +43,7 @@
         "test:smoke": "cd bruno/mcp-oauth-gate && bru run --env compose"
     },
     "dependencies": {
-        "better-sqlite3": "13.0.3",
+        "better-sqlite3": "13.1.1",
         "express": "5.2.1",
         "jose": "6.2.12",
         "zod": "4.6.5"
